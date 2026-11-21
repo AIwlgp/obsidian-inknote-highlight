@@ -90,6 +90,7 @@ Obsidian's default Markdown coloring wins over ordinary inline styles, so the pl
 
 ## Changelog
 
+- **v2.0.7** — English-first README (`README.md`), Chinese translation moved to `README.zh.md` (same functionality as 2.0.6).
 - **v2.0.6** — Manifest metadata compliance: Basic Latin name (`InkNote Highlight`) and an English description ending with a period, as required by the community directory (same functionality as 2.0.5).
 - **v2.0.5** — Fixed: text after a URL (`https://...`) was wrongly tinted as a meta value (meta keys are now Chinese-only). Perf: container scanning (code fences / tables) is cached per document text, so scrolling and theme switches no longer rescan the whole note.
 - **v2.0.4** — Fixed: bare URLs split into multiple colors, bold book titles overridden by the bold color, task-list `x` tinted as Latin text. Editor mode now processes only the visible viewport (much faster on large notes); light/dark switch re-colors immediately; reading-view styles use `!important`.

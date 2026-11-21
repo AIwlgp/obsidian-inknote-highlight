@@ -1,6 +1,6 @@
 {
   "name": "obsidian-inknote-highlight-v2",
-  "version": "2.0.6",
+  "version": "2.0.7",
   "description": "墨记中文结构高亮 v2：中文结构化语法高亮 Obsidian 插件（源码与构建），正则规则表 + 严格最内层嵌套染色。",
   "main": "main.js",
   "scripts": {
