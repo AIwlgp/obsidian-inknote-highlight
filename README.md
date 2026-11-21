@@ -1,5 +1,7 @@
 # 墨记中文结构高亮 v2（inknote-highlight）
 
+> [**中文**](README.md) | [English](README.en.md)
+
 > Structured syntax highlighting for **Chinese** notes in Obsidian: chapter headings, 《book titles》, 「quotes」, meta key–value pairs, ordinals, dates and links each get their own color, layered by a "strict innermost wins" rule. Desktop only.
 
 一个 Obsidian 插件，为**中文结构化笔记**（小说、书籍、阅读笔记等）提供基于正则的结构化语法高亮。核心思路是「一张正则规则表 + 严格最内层嵌套染色」，并覆盖 Obsidian 默认的 Markdown 染色。
