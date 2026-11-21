@@ -1,9 +1,9 @@
 {
   "id": "inknote-highlight",
-  "name": "墨记中文结构高亮",
+  "name": "InkNote Highlight",
   "version": "2.0.5",
   "minAppVersion": "1.5.0",
-  "description": "中文结构化语法高亮 v2：正则规则表 + 严格最内层嵌套染色，覆盖 Obsidian 默认 Markdown 染色",
+  "description": "Structural syntax highlighting for Chinese notes: book titles, quotes, heading levels, meta key-value pairs, ordinals and dates, layered with an innermost-wins palette.",
   "author": "aiwlgp",
   "isDesktopOnly": true
 }
