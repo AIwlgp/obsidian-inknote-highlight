@@ -1,4 +1,4 @@
-# 墨记中文结构高亮 v2（inknote-highlight）
+# InkNote Highlight（墨记中文结构高亮）
 
 > [**中文**](README.md) | [English](README.en.md)
 
