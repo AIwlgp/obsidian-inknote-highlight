@@ -1,0 +1,9 @@
+{
+  "id": "inknote-highlight",
+  "name": "墨记中文结构高亮",
+  "version": "2.0.5",
+  "minAppVersion": "1.5.0",
+  "description": "中文结构化语法高亮 v2：正则规则表 + 严格最内层嵌套染色，覆盖 Obsidian 默认 Markdown 染色",
+  "author": "aiwlgp",
+  "isDesktopOnly": true
+}

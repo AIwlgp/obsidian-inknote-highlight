@@ -1,0 +1,16 @@
+# 依赖
+node_modules/
+
+# 发布包（由 npm run build 生成）
+dist/
+
+# 构建产物备份链
+main.bak*.js
+
+# 手动备份快照
+_backup_*/
+
+# 系统/编辑器临时文件
+*.log
+.DS_Store
+Thumbs.db

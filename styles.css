@@ -1,0 +1,27 @@
+/* 墨记中文结构高亮 v2 — 样式备用层 */
+
+/* 阅读模式：.inknote-hl span 的 inline style 已覆盖 Obsidian 默认样式。
+ * 编辑模式：CodeMirror Decoration 的 inline style + !important 已覆盖默认。
+ * 此文件仅作备用微调。 */
+
+.inknote-hl {
+  display: inline;
+}
+
+/* ===== Live Preview（视图模式）表格表头染色 =====
+ * 原理：Live Preview 把表格渲染成真实 <table>，源码文本被 UI 覆盖，
+ * JS 的 mark decoration 染在文本层上看不见。
+ * 这里直接对渲染后的表头单元格（th）染 meta 色，与源码模式保持一致。
+ */
+.markdown-source-view.mod-cm6 table th,
+.markdown-source-view.mod-cm6 .cm-table-widget th {
+  font-weight: bold;
+}
+.theme-light .markdown-source-view.mod-cm6 table th,
+.theme-light .markdown-source-view.mod-cm6 .cm-table-widget th {
+  color: #00838F;
+}
+.theme-dark .markdown-source-view.mod-cm6 table th,
+.theme-dark .markdown-source-view.mod-cm6 .cm-table-widget th {
+  color: #4DD0E1;
+}

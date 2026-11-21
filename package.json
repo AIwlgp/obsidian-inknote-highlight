@@ -1,0 +1,25 @@
+{
+  "name": "obsidian-inknote-highlight-v2",
+  "version": "2.0.5",
+  "description": "墨记中文结构高亮 v2：中文结构化语法高亮 Obsidian 插件（源码与构建），正则规则表 + 严格最内层嵌套染色。",
+  "main": "main.js",
+  "scripts": {
+    "build": "node build.mjs",
+    "backup": "node backup.mjs",
+    "test": "node --test test/tokens.test.js"
+  },
+  "keywords": [
+    "obsidian",
+    "obsidian-plugin",
+    "highlight",
+    "chinese",
+    "chinese-highlight"
+  ],
+  "author": "aiwlgp",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  },
+  "private": true
+}
