@@ -601,6 +601,7 @@ function buildPreviewText() {
   const sPrefix = parseUnitOptions(cfg.sectionPrefix)[0] || "";
   const sUnit = parseUnitOptions(cfg.sectionUnits, { whole: true })[0] || "\u5F15\u8A00";
   return [
+    "\u300A\u68A6\u5883\u56DB\u91CD\u594F\u300B\u300C\u5F15\u53F7\u300D\u300E\u4E66\u540D\u5F15\u53F7\u300F\u201C\u53CC\u5F15\u53F7\u201D",
     `${p}1${vu} \u598A\u6C90`,
     `${p}1${cu} \u8D3E\u6838`,
     `${sPrefix}1${sep}${sUnit}`,
@@ -616,7 +617,6 @@ function buildPreviewText() {
     "- \u5217\u8868\u9879",
     "- [x] \u4EFB\u52A1\u9879",
     "\u4E00\u3001\u4E2D\u6587\u5E8F\u53F7",
-    "\u300A\u68A6\u5883\u56DB\u91CD\u594F\u300B\u300C\u5F15\u53F7\u300D\u300E\u4E66\u540D\u5F15\u53F7\u300F\u201C\u53CC\u5F15\u53F7\u201D",
     "[1] \u2460 \uFF081961\uFF09 \uFF08\u4E2D\u6587\u62EC\u53F7\uFF09",
     "2024-01-01 12:30 1970s 7.83Hz",
     "\u2192 \u2014\u2014",
@@ -687,8 +687,8 @@ function firstSeparator(input) {
 function sampleFor(key) {
   const cfg = activeRulesConfig;
   const p = parseUnitOptions(cfg.prefix)[0] || "\u7B2C";
-  if (key === "vol") return `${p}1${parseUnitOptions(cfg.volumeUnits)[0] || "\u5377"} \u98CE\u8D77`;
-  if (key === "chapter") return `${p}1${parseUnitOptions(cfg.chapterUnits)[0] || "\u7AE0"} \u5F00\u7AEF`;
+  if (key === "vol") return `${p}1${parseUnitOptions(cfg.volumeUnits)[0] || "\u5377"} \u598A\u6C90`;
+  if (key === "chapter") return `${p}1${parseUnitOptions(cfg.chapterUnits)[0] || "\u7AE0"} \u8D3E\u6838`;
   if (key === "section") {
     const sp = parseUnitOptions(cfg.sectionPrefix)[0] || "";
     const sep = firstSeparator(cfg.sectionSeparators);

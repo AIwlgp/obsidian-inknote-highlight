@@ -695,6 +695,7 @@ function buildPreviewText() {
   const sPrefix = parseUnitOptions(cfg.sectionPrefix)[0] || "";
   const sUnit = parseUnitOptions(cfg.sectionUnits, { whole: true })[0] || "引言";
   return [
+    "《梦境四重奏》「引号」『书名引号』“双引号”",
     `${p}1${vu} 妊沐`,
     `${p}1${cu} 贾核`,
     `${sPrefix}1${sep}${sUnit}`,
@@ -710,7 +711,6 @@ function buildPreviewText() {
     "- 列表项",
     "- [x] 任务项",
     "一、中文序号",
-    "《梦境四重奏》「引号」『书名引号』“双引号”",
     "[1] ① （1961） （中文括号）",
     "2024-01-01 12:30 1970s 7.83Hz",
     "→ ——",
@@ -789,8 +789,8 @@ function firstSeparator(input) {
 function sampleFor(key) {
   const cfg = activeRulesConfig;
   const p = parseUnitOptions(cfg.prefix)[0] || "第";
-  if (key === "vol") return `${p}1${parseUnitOptions(cfg.volumeUnits)[0] || "卷"} 风起`;
-  if (key === "chapter") return `${p}1${parseUnitOptions(cfg.chapterUnits)[0] || "章"} 开端`;
+  if (key === "vol") return `${p}1${parseUnitOptions(cfg.volumeUnits)[0] || "卷"} 妊沐`;
+  if (key === "chapter") return `${p}1${parseUnitOptions(cfg.chapterUnits)[0] || "章"} 贾核`;
   if (key === "section") {
     const sp = parseUnitOptions(cfg.sectionPrefix)[0] || "";
     const sep = firstSeparator(cfg.sectionSeparators);
