@@ -66,6 +66,18 @@ var THEMES = {
     bracket: "#4DB6AC"
   }
 };
+var activeThemes = {
+  light: { ...THEMES.light },
+  dark: { ...THEMES.dark }
+};
+function applyColorOverrides(overrides) {
+  const o = overrides || {};
+  activeThemes = {
+    light: Object.assign({}, THEMES.light, o.light || {}),
+    dark: Object.assign({}, THEMES.dark, o.dark || {})
+  };
+  return activeThemes;
+}
 function buildRules(t) {
   return [
     // ===== 行级规则（整行语义） =====
@@ -317,12 +329,12 @@ function synthesize(text, spans) {
 }
 function buildTokens(text, isDark) {
   if (!text) return [];
-  const theme = isDark ? THEMES.dark : THEMES.light;
+  const theme = isDark ? activeThemes.dark : activeThemes.light;
   return synthesize(text, collectSpans(text, theme));
 }
 function buildTokensIn(text, isDark, ctx, winStart, winEnd) {
   if (!text || winEnd <= winStart) return [];
-  const theme = isDark ? THEMES.dark : THEMES.light;
+  const theme = isDark ? activeThemes.dark : activeThemes.light;
   const slice = text.slice(winStart, winEnd);
   return synthesize(slice, collectSpans(text, theme, { winStart, winEnd, ctx }));
 }
@@ -332,7 +344,7 @@ function setStyle(el, prop, val) {
 }
 function readingProcessor(el) {
   const isDark = document.body.classList.contains("theme-dark");
-  const t = isDark ? THEMES.dark : THEMES.light;
+  const t = isDark ? activeThemes.dark : activeThemes.light;
   const headingColor = { H1: t.h1, H2: t.h2, H3: t.h3, H4: t.h4, H5: t.h4, H6: t.h4 };
   for (const h of el.querySelectorAll("h1,h2,h3,h4,h5,h6")) {
     const c = headingColor[h.tagName];
@@ -432,8 +444,12 @@ var editingPlugin = ViewPlugin.fromClass(
 );
 module.exports = class InknoteHighlight extends obsidian.Plugin {
   async onload() {
+    this.settings = Object.assign({ colors: { light: {}, dark: {} } }, await this.loadData());
+    if (!this.settings.colors) this.settings.colors = { light: {}, dark: {} };
+    applyColorOverrides(this.settings.colors);
     this.registerMarkdownPostProcessor(readingProcessor);
     this.registerEditorExtension(editingPlugin);
+    this.addSettingTab(new HighlightSettingsTab(this.app, this));
     let lastDark = document.body.classList.contains("theme-dark");
     const observer = new MutationObserver(() => {
       const dark = document.body.classList.contains("theme-dark");
@@ -448,9 +464,185 @@ module.exports = class InknoteHighlight extends obsidian.Plugin {
     observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
     this.register(() => observer.disconnect());
   }
+  /** 颜色变更后重刷所有已打开视图：编辑模式（dispatch 重建）+ 阅读模式（rerender） */
+  refreshViews() {
+    themeEpoch++;
+    for (const el of document.querySelectorAll(".cm-editor")) {
+      const v = EditorView.findFromDOM(el);
+      if (v) v.dispatch({});
+    }
+    this.app.workspace.getLeavesOfType("markdown").forEach((leaf) => {
+      const pm = leaf.view && leaf.view.previewMode;
+      if (pm && typeof pm.rerender === "function") pm.rerender(true);
+    });
+  }
+  async saveSettings() {
+    await this.saveData(this.settings);
+  }
+};
+var COLOR_LABELS = {
+  vol: "\u5377\u6807\u9898\uFF08\u7B2CX\u5377\uFF09",
+  chapter: "\u7AE0\u8282\u6807\u9898\uFF08\u7B2CX\u56DE/\u7AE0/\u8282\uFF09",
+  section: "\u5C0F\u8282 / \u56FA\u5B9A\u6807\u9898\uFF081 \u5F15\u8A00\u3001\u7B80\u4ECB\uFF09",
+  h1: "\u6807\u9898 # \u4E00\u7EA7",
+  h2: "\u6807\u9898 ## \u4E8C\u7EA7",
+  h3: "\u6807\u9898 ### \u4E09\u7EA7",
+  h4: "\u6807\u9898 #### \u56DB\u7EA7\u53CA\u4EE5\u4E0B",
+  ordinalCircle: "\u5706\u5708\u5E8F\u53F7 \u2460",
+  ordinalParenNum: "\u62EC\u53F7\u6570\u5B57\uFF081961\uFF09",
+  ordinalParenCn: "\u4E2D\u6587\u62EC\u53F7\uFF08\uFF09",
+  arrow: "\u7BAD\u5934 \u2192",
+  dash: "\u7834\u6298\u53F7 \u2014\u2014",
+  italic: "\u659C\u4F53\u6807\u6CE8\u884C *\u2026",
+  meta: "\u8868\u683C\u8868\u5934",
+  metaKey: "meta \u952E\uFF08\u4F5C\u8005\uFF09",
+  metaValue: "meta \u503C\uFF08\uFF1A\u9C81\u8FC5\uFF09",
+  ref: "\u53C2\u8003\u6587\u732E [1]",
+  blockquote: "\u5F15\u7528\u884C >",
+  book: "\u4E66\u540D\u53F7\u300A\u300B",
+  quote: "\u5F15\u53F7\u300C\u300D",
+  quoteDouble: "\u5F15\u53F7\u201C\u201D",
+  quoteBook: "\u5F15\u53F7\u300E\u300F",
+  numeric: "\u6570\u5B57 / \u65E5\u671F / \u65F6\u95F4",
+  bold: "\u7C97\u4F53 **",
+  link: "\u94FE\u63A5 / URL",
+  strike: "\u5220\u9664\u7EBF ~~",
+  list: "\u5217\u8868\u6807\u8BB0 -",
+  en: "\u82F1\u6587 / \u62C9\u4E01\u6807\u8BC6\u7B26",
+  bracket: "\u65B9\u62EC\u53F7\u3010\u3011"
+};
+var PREVIEW_TEXT = [
+  "\u7B2C1\u5377 \u98CE\u8D77",
+  "\u7B2C1\u7AE0 \u5F00\u7AEF",
+  "1 \u5F15\u8A00",
+  "\u7B80\u4ECB",
+  "\u4F5C\u8005\uFF1A\u9C81\u8FC5",
+  "---",
+  "# \u4E00\u7EA7\u6807\u9898",
+  "## \u4E8C\u7EA7\u6807\u9898",
+  "### \u4E09\u7EA7\u6807\u9898",
+  "#### \u56DB\u7EA7\u6807\u9898",
+  "> \u5F15\u7528\u884C",
+  "*\u659C\u4F53\u6807\u6CE8\u884C",
+  "- \u5217\u8868\u9879",
+  "- [x] \u4EFB\u52A1\u9879",
+  "\u4E00\u3001\u4E2D\u6587\u5E8F\u53F7",
+  "\u300A\u7EA2\u697C\u68A6\u300B\u300C\u5F15\u53F7\u300D\u300E\u4E66\u540D\u5F15\u53F7\u300F\u201C\u53CC\u5F15\u53F7\u201D",
+  "[1] \u2460 \uFF081961\uFF09 \uFF08\u4E2D\u6587\u62EC\u53F7\uFF09",
+  "2024-01-01 12:30 1970s 7.83Hz",
+  "\u2192 \u2014\u2014",
+  "**\u7C97\u4F53** ~~\u5220\u9664~~ `\u4EE3\u7801`",
+  "[\u94FE\u63A5](https://example.com) [[wiki]]",
+  "",
+  "| \u8868\u5934 | \u8868\u5934 |",
+  "|---|---|",
+  "| \u6B63\u6587 | \u6B63\u6587 |"
+].join("\n");
+function renderPreview(container, isDark) {
+  if (!container) return;
+  container.empty();
+  const pre = container.createEl("pre");
+  pre.style.cssText = [
+    "white-space: pre-wrap",
+    "margin: 0",
+    "padding: 12px",
+    "border: 1px solid var(--background-modifier-border)",
+    "border-radius: 6px",
+    "font-family: var(--font-text)",
+    "font-size: 13px",
+    "line-height: 1.7",
+    "max-height: 420px",
+    "overflow: auto",
+    isDark ? "background: #1e1e1e; color: #dcdcdc" : "background: #ffffff; color: #222222"
+  ].join("; ");
+  const frag = document.createDocumentFragment();
+  for (const tk of buildTokens(PREVIEW_TEXT, isDark)) {
+    if (!tk.color && !tk.bold && !tk.strike && !tk.mono && !tk.sizeDelta) {
+      frag.appendChild(document.createTextNode(tk.text));
+      continue;
+    }
+    const span = document.createElement("span");
+    span.textContent = tk.text;
+    if (tk.color) span.style.setProperty("color", tk.color, "important");
+    if (tk.bold) span.style.setProperty("font-weight", "bold", "important");
+    if (tk.sizeDelta) span.style.setProperty("font-size", `calc(1em + ${tk.sizeDelta}px)`, "important");
+    if (tk.strike) span.style.setProperty("text-decoration", "line-through", "important");
+    if (tk.mono) span.style.setProperty("font-family", "var(--font-monospace)", "important");
+    frag.appendChild(span);
+  }
+  pre.appendChild(frag);
+}
+var HighlightSettingsTab = class extends obsidian.PluginSettingTab {
+  constructor(app, plugin) {
+    super(app, plugin);
+    this.plugin = plugin;
+    this.previewEls = { light: null, dark: null };
+  }
+  display() {
+    const { containerEl } = this;
+    containerEl.empty();
+    containerEl.createEl("h3", { text: "\u5B9E\u65F6\u9884\u89C8" });
+    const wrap = containerEl.createDiv();
+    wrap.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px;";
+    for (const mode of ["light", "dark"]) {
+      const box = wrap.createDiv();
+      const label = box.createEl("div", { text: mode === "light" ? "\u4EAE\u8272\u4E3B\u9898" : "\u6697\u8272\u4E3B\u9898" });
+      label.style.cssText = "font-weight:600;margin-bottom:6px;color:var(--text-muted);";
+      const el = box.createDiv();
+      this.previewEls[mode] = el;
+    }
+    this.refreshPreviews();
+    for (const mode of ["light", "dark"]) {
+      containerEl.createEl("h3", { text: mode === "light" ? "\u4EAE\u8272\u4E3B\u9898\u989C\u8272" : "\u6697\u8272\u4E3B\u9898\u989C\u8272" });
+      const hint = containerEl.createEl("p", {
+        text: "\u9010\u9879\u4FEE\u6539\uFF1B\u70B9\u51FB \u21BA \u6062\u590D\u8BE5\u9879\u9ED8\u8BA4\u503C\u3002\u4FEE\u6539\u4F1A\u7ACB\u5373\u5E94\u7528\u5230\u5DF2\u6253\u5F00\u7684\u7B14\u8BB0\u3002"
+      });
+      hint.style.color = "var(--text-muted)";
+      this.renderColorGroup(containerEl, mode);
+    }
+    new obsidian.Setting(containerEl).setName("\u91CD\u7F6E\u5168\u90E8\u989C\u8272").setDesc("\u6E05\u7A7A\u6240\u6709\u81EA\u5B9A\u4E49\u989C\u8272\uFF0C\u6062\u590D\u5185\u7F6E\u914D\u8272\u3002").addButton((b) => b.setButtonText("\u5168\u90E8\u6062\u590D\u9ED8\u8BA4").onClick(async () => {
+      this.plugin.settings.colors = { light: {}, dark: {} };
+      await this.plugin.saveSettings();
+      applyColorOverrides(this.plugin.settings.colors);
+      this.plugin.refreshViews();
+      this.display();
+    }));
+  }
+  refreshPreviews() {
+    renderPreview(this.previewEls.light, false);
+    renderPreview(this.previewEls.dark, true);
+  }
+  async applyChange(mode, key, value) {
+    const colors = this.plugin.settings.colors;
+    colors[mode] = colors[mode] || {};
+    if (value) colors[mode][key] = value;
+    else delete colors[mode][key];
+    await this.plugin.saveSettings();
+    applyColorOverrides(colors);
+    this.plugin.refreshViews();
+    this.refreshPreviews();
+  }
+  renderColorGroup(parent, mode) {
+    const defaults = THEMES[mode];
+    const overrides = this.plugin.settings.colors[mode] || {};
+    for (const key of Object.keys(defaults)) {
+      let picker = null;
+      new obsidian.Setting(parent).setName(COLOR_LABELS[key] || key).addColorPicker((cp) => {
+        picker = cp;
+        cp.setValue(overrides[key] || defaults[key]).onChange(async (v) => {
+          await this.applyChange(mode, key, v);
+        });
+      }).addExtraButton((b) => b.setIcon("rotate-ccw").setTooltip("\u6062\u590D\u9ED8\u8BA4").onClick(async () => {
+        await this.applyChange(mode, key, null);
+        if (picker) picker.setValue(defaults[key]);
+      }));
+    }
+  }
 };
 module.exports.__test = {
   THEMES,
+  applyColorOverrides,
+  getActiveThemes: () => activeThemes,
   buildRules,
   detectContainers,
   createContainerCache,

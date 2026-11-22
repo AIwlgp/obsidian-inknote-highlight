@@ -76,6 +76,12 @@ Rebuild with `npm run build` after changes.
 
 Obsidian's default Markdown coloring wins over ordinary inline styles, so the plugin sets colors with `!important` (both in Reading view spans and in CodeMirror mark decorations). This is intentional — without it the custom palette would be invisible.
 
+## Custom colors
+
+Settings → **InkNote Highlight** opens a panel with a **live preview** of both light and dark themes. Every color token (book titles, quotes, heading levels, meta pairs, numbers, links, list markers, …) can be overridden per theme with a color picker. Click `↺` to restore a single token's default, or use **Reset all colors** to go back to the built-in palette.
+
+Changes apply immediately to open notes: editor decorations are rebuilt and reading views re-render. Overrides live in the plugin's `data.json` under `colors.light` / `colors.dark` — only the keys you changed are stored, so future updates to the default palette still reach you.
+
 ## Repository layout
 
 | Path | Purpose |
@@ -90,6 +96,7 @@ Obsidian's default Markdown coloring wins over ordinary inline styles, so the pl
 
 ## Changelog
 
+- **v2.0.8** — Per-token custom colors for light and dark themes, with a live preview in settings; changes apply to open notes immediately.
 - **v2.0.7** — English-first README (`README.md`), Chinese translation moved to `README.zh.md` (same functionality as 2.0.6).
 - **v2.0.6** — Manifest metadata compliance: Basic Latin name (`InkNote Highlight`) and an English description ending with a period, as required by the community directory (same functionality as 2.0.5).
 - **v2.0.5** — Fixed: text after a URL (`https://...`) was wrongly tinted as a meta value (meta keys are now Chinese-only). Perf: container scanning (code fences / tables) is cached per document text, so scrolling and theme switches no longer rescan the whole note.

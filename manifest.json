@@ -1,7 +1,7 @@
 {
   "id": "inknote-highlight",
   "name": "InkNote Highlight",
-  "version": "2.0.7",
+  "version": "2.0.8",
   "minAppVersion": "1.5.0",
   "description": "Structural syntax highlighting for Chinese notes: book titles, quotes, heading levels, meta key-value pairs, ordinals and dates, layered with an innermost-wins palette.",
   "author": "aiwlgp",

@@ -41,6 +41,24 @@ const THEMES = {
   },
 };
 
+// ---------- 生效配色（默认 + 用户覆盖） ----------
+// 用户可以在设置里逐项覆盖颜色（亮/暗各自一套）。activeThemes 是当前实际使用的配色表，
+// 所有构建路径（buildRules → collectSpans → synthesize → 渲染）都读它，
+// 改色后调用 applyColorOverrides + 刷新视图即可实时生效。
+let activeThemes = {
+  light: { ...THEMES.light },
+  dark: { ...THEMES.dark },
+};
+
+function applyColorOverrides(overrides) {
+  const o = overrides || {};
+  activeThemes = {
+    light: Object.assign({}, THEMES.light, o.light || {}),
+    dark: Object.assign({}, THEMES.dark, o.dark || {}),
+  };
+  return activeThemes;
+}
+
 // ---------- 规则表 ----------
 // 每条规则：
 //   re    : 正则（行级规则带 m 标志，^ $ 锚定行；行内规则不带）
@@ -337,7 +355,7 @@ function synthesize(text, spans) {
 
 function buildTokens(text, isDark) {
   if (!text) return [];
-  const theme = isDark ? THEMES.dark : THEMES.light;
+  const theme = isDark ? activeThemes.dark : activeThemes.light;
   return synthesize(text, collectSpans(text, theme));
 }
 
@@ -346,7 +364,7 @@ function buildTokens(text, isDark) {
 // 返回的 token 坐标相对窗口切片（window-relative），由调用方换算成文档偏移。
 function buildTokensIn(text, isDark, ctx, winStart, winEnd) {
   if (!text || winEnd <= winStart) return [];
-  const theme = isDark ? THEMES.dark : THEMES.light;
+  const theme = isDark ? activeThemes.dark : activeThemes.light;
   const slice = text.slice(winStart, winEnd);
   return synthesize(slice, collectSpans(text, theme, { winStart, winEnd, ctx }));
 }
@@ -359,7 +377,7 @@ function setStyle(el, prop, val) { el.style.setProperty(prop, val, "important");
 
 function readingProcessor(el) {
   const isDark = document.body.classList.contains("theme-dark");
-  const t = isDark ? THEMES.dark : THEMES.light;
+  const t = isDark ? activeThemes.dark : activeThemes.light;
 
   // 元素级染色：Obsidian 已把 # 标题和 ** 粗体渲染成元素，文本节点里没有标记字符
   const headingColor = { H1: t.h1, H2: t.h2, H3: t.h3, H4: t.h4, H5: t.h4, H6: t.h4 };
@@ -470,8 +488,14 @@ const editingPlugin = ViewPlugin.fromClass(
 // ---------- 插件入口 ----------
 module.exports = class InknoteHighlight extends obsidian.Plugin {
   async onload() {
+    this.settings = Object.assign({ colors: { light: {}, dark: {} } }, await this.loadData());
+    if (!this.settings.colors) this.settings.colors = { light: {}, dark: {} };
+    applyColorOverrides(this.settings.colors);
+
     this.registerMarkdownPostProcessor(readingProcessor);
     this.registerEditorExtension(editingPlugin);
+
+    this.addSettingTab(new HighlightSettingsTab(this.app, this));
 
     // 主题切换监听：body 的 theme-dark/theme-light class 变化后，递增纪元并强制各编辑器重算装饰。
     // 否则切换亮/暗主题时编辑模式的高亮色不会刷新（默认只在 doc/viewport 变化时重建）。
@@ -489,12 +513,214 @@ module.exports = class InknoteHighlight extends obsidian.Plugin {
     observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
     this.register(() => observer.disconnect());
   }
+
+  /** 颜色变更后重刷所有已打开视图：编辑模式（dispatch 重建）+ 阅读模式（rerender） */
+  refreshViews() {
+    themeEpoch++;
+    for (const el of document.querySelectorAll(".cm-editor")) {
+      const v = EditorView.findFromDOM(el);
+      if (v) v.dispatch({});
+    }
+    this.app.workspace.getLeavesOfType("markdown").forEach((leaf) => {
+      const pm = leaf.view && leaf.view.previewMode;
+      if (pm && typeof pm.rerender === "function") pm.rerender(true);
+    });
+  }
+
+  async saveSettings() {
+    await this.saveData(this.settings);
+  }
 };
+
+// ---------- 设置面板：逐项改色 + 实时预览 ----------
+
+// 颜色键 → 中文说明（覆盖 THEMES 里的全部键）
+const COLOR_LABELS = {
+  vol: "卷标题（第X卷）",
+  chapter: "章节标题（第X回/章/节）",
+  section: "小节 / 固定标题（1 引言、简介）",
+  h1: "标题 # 一级",
+  h2: "标题 ## 二级",
+  h3: "标题 ### 三级",
+  h4: "标题 #### 四级及以下",
+  ordinalCircle: "圆圈序号 ①",
+  ordinalParenNum: "括号数字（1961）",
+  ordinalParenCn: "中文括号（）",
+  arrow: "箭头 →",
+  dash: "破折号 ——",
+  italic: "斜体标注行 *…",
+  meta: "表格表头",
+  metaKey: "meta 键（作者）",
+  metaValue: "meta 值（：鲁迅）",
+  ref: "参考文献 [1]",
+  blockquote: "引用行 >",
+  book: "书名号《》",
+  quote: "引号「」",
+  quoteDouble: "引号“”",
+  quoteBook: "引号『』",
+  numeric: "数字 / 日期 / 时间",
+  bold: "粗体 **",
+  link: "链接 / URL",
+  strike: "删除线 ~~",
+  list: "列表标记 -",
+  en: "英文 / 拉丁标识符",
+  bracket: "方括号【】",
+};
+
+// 预览用的示例文本：覆盖所有规则类型
+const PREVIEW_TEXT = [
+  "第1卷 风起",
+  "第1章 开端",
+  "1 引言",
+  "简介",
+  "作者：鲁迅",
+  "---",
+  "# 一级标题",
+  "## 二级标题",
+  "### 三级标题",
+  "#### 四级标题",
+  "> 引用行",
+  "*斜体标注行",
+  "- 列表项",
+  "- [x] 任务项",
+  "一、中文序号",
+  "《红楼梦》「引号」『书名引号』“双引号”",
+  "[1] ① （1961） （中文括号）",
+  "2024-01-01 12:30 1970s 7.83Hz",
+  "→ ——",
+  "**粗体** ~~删除~~ `代码`",
+  "[链接](https://example.com) [[wiki]]",
+  "",
+  "| 表头 | 表头 |",
+  "|---|---|",
+  "| 正文 | 正文 |",
+].join("\n");
+
+function renderPreview(container, isDark) {
+  if (!container) return;
+  container.empty();
+  const pre = container.createEl("pre");
+  pre.style.cssText = [
+    "white-space: pre-wrap",
+    "margin: 0",
+    "padding: 12px",
+    "border: 1px solid var(--background-modifier-border)",
+    "border-radius: 6px",
+    "font-family: var(--font-text)",
+    "font-size: 13px",
+    "line-height: 1.7",
+    "max-height: 420px",
+    "overflow: auto",
+    isDark ? "background: #1e1e1e; color: #dcdcdc" : "background: #ffffff; color: #222222",
+  ].join("; ");
+  const frag = document.createDocumentFragment();
+  for (const tk of buildTokens(PREVIEW_TEXT, isDark)) {
+    if (!tk.color && !tk.bold && !tk.strike && !tk.mono && !tk.sizeDelta) {
+      frag.appendChild(document.createTextNode(tk.text));
+      continue;
+    }
+    const span = document.createElement("span");
+    span.textContent = tk.text;
+    if (tk.color) span.style.setProperty("color", tk.color, "important");
+    if (tk.bold) span.style.setProperty("font-weight", "bold", "important");
+    if (tk.sizeDelta) span.style.setProperty("font-size", `calc(1em + ${tk.sizeDelta}px)`, "important");
+    if (tk.strike) span.style.setProperty("text-decoration", "line-through", "important");
+    if (tk.mono) span.style.setProperty("font-family", "var(--font-monospace)", "important");
+    frag.appendChild(span);
+  }
+  pre.appendChild(frag);
+}
+
+class HighlightSettingsTab extends obsidian.PluginSettingTab {
+  constructor(app, plugin) {
+    super(app, plugin);
+    this.plugin = plugin;
+    this.previewEls = { light: null, dark: null };
+  }
+
+  display() {
+    const { containerEl } = this;
+    containerEl.empty();
+
+    containerEl.createEl("h3", { text: "实时预览" });
+    const wrap = containerEl.createDiv();
+    wrap.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px;";
+    for (const mode of ["light", "dark"]) {
+      const box = wrap.createDiv();
+      const label = box.createEl("div", { text: mode === "light" ? "亮色主题" : "暗色主题" });
+      label.style.cssText = "font-weight:600;margin-bottom:6px;color:var(--text-muted);";
+      const el = box.createDiv();
+      this.previewEls[mode] = el;
+    }
+    this.refreshPreviews();
+
+    for (const mode of ["light", "dark"]) {
+      containerEl.createEl("h3", { text: mode === "light" ? "亮色主题颜色" : "暗色主题颜色" });
+      const hint = containerEl.createEl("p", {
+        text: "逐项修改；点击 ↺ 恢复该项默认值。修改会立即应用到已打开的笔记。",
+      });
+      hint.style.color = "var(--text-muted)";
+      this.renderColorGroup(containerEl, mode);
+    }
+
+    new obsidian.Setting(containerEl)
+      .setName("重置全部颜色")
+      .setDesc("清空所有自定义颜色，恢复内置配色。")
+      .addButton((b) => b.setButtonText("全部恢复默认").onClick(async () => {
+        this.plugin.settings.colors = { light: {}, dark: {} };
+        await this.plugin.saveSettings();
+        applyColorOverrides(this.plugin.settings.colors);
+        this.plugin.refreshViews();
+        this.display();
+      }));
+  }
+
+  refreshPreviews() {
+    renderPreview(this.previewEls.light, false);
+    renderPreview(this.previewEls.dark, true);
+  }
+
+  async applyChange(mode, key, value) {
+    const colors = this.plugin.settings.colors;
+    colors[mode] = colors[mode] || {};
+    if (value) colors[mode][key] = value;
+    else delete colors[mode][key];
+    await this.plugin.saveSettings();
+    applyColorOverrides(colors);
+    this.plugin.refreshViews();
+    this.refreshPreviews();
+  }
+
+  renderColorGroup(parent, mode) {
+    const defaults = THEMES[mode];
+    const overrides = this.plugin.settings.colors[mode] || {};
+    for (const key of Object.keys(defaults)) {
+      let picker = null;
+      new obsidian.Setting(parent)
+        .setName(COLOR_LABELS[key] || key)
+        .addColorPicker((cp) => {
+          picker = cp;
+          cp.setValue(overrides[key] || defaults[key]).onChange(async (v) => {
+            await this.applyChange(mode, key, v);
+          });
+        })
+        .addExtraButton((b) => b
+          .setIcon("rotate-ccw")
+          .setTooltip("恢复默认")
+          .onClick(async () => {
+            await this.applyChange(mode, key, null);
+            if (picker) picker.setValue(defaults[key]);
+          }));
+    }
+  }
+}
 
 // 离线测试出口（Obsidian 只读 module.exports 本身，忽略附加属性）。
 // 供 test/ 下的 node --test 用例直接调用纯逻辑，无需完整 Obsidian 运行时。
 module.exports.__test = {
   THEMES,
+  applyColorOverrides,
+  getActiveThemes: () => activeThemes,
   buildRules,
   detectContainers,
   createContainerCache,

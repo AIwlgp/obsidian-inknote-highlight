@@ -10,7 +10,17 @@ const Module = require('node:module');
 // --- mock 第三方模块（必须在 require 插件源码之前） ---
 const origLoad = Module._load;
 Module._load = function (request, parent, isMain) {
-  if (request === 'obsidian') return { Plugin: class Plugin {} };
+  if (request === 'obsidian') {
+    return {
+      Plugin: class Plugin {},
+      PluginSettingTab: class PluginSettingTab {
+        constructor(app, plugin) { this.app = app; this.plugin = plugin; }
+        // display() 在测试里不调用，但保留方法形状
+        display() {}
+      },
+      Setting: class Setting {},
+    };
+  }
   if (request === '@codemirror/view') {
     return {
       ViewPlugin: { fromClass: (cls) => cls },
@@ -173,4 +183,48 @@ test('synthesize 输出按序覆盖全文', () => {
   const spans = T.collectSpans(text, L);
   const out = T.synthesize(text, spans);
   assert.strictEqual(out.map((x) => x.text).join(''), text);
+});
+
+// ---------- 颜色自定义 ----------
+
+test('颜色覆盖：改 book 色后立即生效，恢复后还原', () => {
+  const before = T.THEMES.light.book;
+  try {
+    T.applyColorOverrides({ light: { book: '#123456' } });
+    const hit = styled('《红楼梦》').find((x) => x.text === '《红楼梦》');
+    assert.strictEqual(hit.color, '#123456');
+  } finally {
+    T.applyColorOverrides({});
+  }
+  const after = styled('《红楼梦》').find((x) => x.text === '《红楼梦》');
+  assert.strictEqual(after.color, before);
+});
+
+test('颜色覆盖：只影响指定主题（dark 改了不影响 light）', () => {
+  try {
+    T.applyColorOverrides({ dark: { book: '#ABCDEF' } });
+    assert.strictEqual(styled('《红楼梦》', true).find((x) => x.text === '《红楼梦》').color, '#ABCDEF');
+    assert.strictEqual(styled('《红楼梦》', false).find((x) => x.text === '《红楼梦》').color, T.THEMES.light.book);
+  } finally {
+    T.applyColorOverrides({});
+  }
+});
+
+test('颜色覆盖：未知键被忽略，不影响已有颜色', () => {
+  try {
+    T.applyColorOverrides({ light: { notAKey: '#000000' } });
+    assert.strictEqual(styled('《红楼梦》').find((x) => x.text === '《红楼梦》').color, T.THEMES.light.book);
+  } finally {
+    T.applyColorOverrides({});
+  }
+});
+
+test('颜色覆盖：getActiveThemes 反映当前生效值', () => {
+  try {
+    T.applyColorOverrides({ light: { quote: '#FF00FF' } });
+    assert.strictEqual(T.getActiveThemes().light.quote, '#FF00FF');
+    assert.strictEqual(T.getActiveThemes().light.book, T.THEMES.light.book);
+  } finally {
+    T.applyColorOverrides({});
+  }
 });
