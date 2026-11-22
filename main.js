@@ -665,26 +665,14 @@ var HighlightSettingsTab = class extends obsidian.PluginSettingTab {
     super(app, plugin);
     this.plugin = plugin;
     this.previewEls = { light: null, dark: null };
+    this.sampleEls = {};
+    this.ruleInputRefs = { prefix: [], volumeUnits: [], chapterUnits: [] };
   }
   display() {
     const { containerEl } = this;
     containerEl.empty();
     this.sampleEls = {};
-    containerEl.createEl("h3", { text: "\u7279\u6B8A\u89C4\u5219\uFF08\u81EA\u5B9A\u4E49\u5339\u914D\u5B57\uFF09" });
-    const ruleHint = containerEl.createEl("p", {
-      text: "\u884C\u7EA7\u89C4\u5219\u6A21\u677F\uFF1A\u8D77\u59CB\u5B57 + \u6570\u5B57 + \u6807\u8BC6\u5B57 + \u5176\u4F59\u5185\u5BB9\u3002\u4F8B\u5982\u628A\u300C\u5E55\u300D\u52A0\u5230\u5377\u7C7B\uFF0C\u300C\u7B2C1\u5E55\u300D\u4E5F\u4F1A\u67D3\u8272\uFF1B\u6539\u8D77\u59CB\u5B57\u53EF\u5339\u914D\u300C\u5E8F1\u5377\u300D\u8FD9\u7C7B\u5199\u6CD5\u3002\u540C\u4E00\u4E2A\u5B57\u5982\u679C\u540C\u65F6\u52A0\u8FDB\u4E24\u7EC4\uFF0C\u4EE5\u5377\u7C7B\u4E3A\u51C6\u3002"
-    });
-    ruleHint.style.color = "var(--text-muted)";
-    const rulesCfg = this.plugin.settings.rules || {};
-    new obsidian.Setting(containerEl).setName("\u8D77\u59CB\u5B57").setDesc("\u9ED8\u8BA4\u300C\u7B2C\u300D\uFF0C\u53EF\u591A\u5B57\uFF08\u5982\u300C\u7B2C\u5E8F\u300D\uFF09\u3002").addText((t) => t.setValue(rulesCfg.prefix || DEFAULT_RULES_CONFIG.prefix).onChange(async (v) => {
-      await this.updateRule("prefix", v);
-    }));
-    new obsidian.Setting(containerEl).setName("\u5377\u7C7B\u6807\u8BC6\u5B57").setDesc("\u9ED8\u8BA4\u300C\u5377\u300D\uFF0C\u53EF\u52A0\u300C\u5E55\u96C6\u7BC7\u300D\u7B49\u3002\u793A\u4F8B\uFF1A\u7B2C1\u5377\u3001\u7B2C1\u5E55\u3002").addText((t) => t.setValue(rulesCfg.volumeUnits || DEFAULT_RULES_CONFIG.volumeUnits).onChange(async (v) => {
-      await this.updateRule("volumeUnits", v);
-    }));
-    new obsidian.Setting(containerEl).setName("\u7AE0\u8282\u7C7B\u6807\u8BC6\u5B57").setDesc("\u9ED8\u8BA4\u300C\u56DE\u7AE0\u8282\u300D\uFF0C\u53EF\u52A0\u300C\u5E55\u96C6\u300D\u7B49\u3002\u793A\u4F8B\uFF1A\u7B2C1\u7AE0\u3001\u7B2C1\u5E55\u3002").addText((t) => t.setValue(rulesCfg.chapterUnits || DEFAULT_RULES_CONFIG.chapterUnits).onChange(async (v) => {
-      await this.updateRule("chapterUnits", v);
-    }));
+    this.ruleInputRefs = { prefix: [], volumeUnits: [], chapterUnits: [] };
     containerEl.createEl("h3", { text: "\u5B9E\u65F6\u9884\u89C8" });
     const wrap = containerEl.createDiv();
     wrap.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px;";
@@ -722,9 +710,13 @@ var HighlightSettingsTab = class extends obsidian.PluginSettingTab {
     s.rules = s.rules || {};
     s.rules[key] = value;
     await this.plugin.saveSettings();
-    applyRulesConfig(s.rules);
+    const applied = applyRulesConfig(s.rules);
     this.plugin.refreshViews();
     this.refreshPreviews();
+    const shown = applied[key];
+    for (const el of this.ruleInputRefs[key] || []) {
+      if (el !== document.activeElement && el.value !== shown) el.value = shown;
+    }
     for (const [k, v] of Object.entries(this.sampleEls || {})) {
       const rulesKey = k.split(":")[1];
       renderSample(v.el, sampleFor(rulesKey), v.mode === "dark");
@@ -740,6 +732,48 @@ var HighlightSettingsTab = class extends obsidian.PluginSettingTab {
     this.plugin.refreshViews();
     this.refreshPreviews();
   }
+  /** 给「卷标题 / 章节标题」行挂上折叠的规则编辑区（点名称最左侧箭头展开） */
+  attachRuleEditor(setting, key) {
+    const caret = document.createElement("span");
+    caret.textContent = "\u25B8";
+    caret.title = key === "vol" ? "\u7F16\u8F91\u5377\u7C7B\u89C4\u5219\u7684\u5339\u914D\u5B57" : "\u7F16\u8F91\u7AE0\u8282\u7C7B\u89C4\u5219\u7684\u5339\u914D\u5B57";
+    caret.style.cssText = "cursor:pointer;margin-right:6px;user-select:none;opacity:0.75;";
+    setting.nameEl.prepend(caret);
+    const detail = document.createElement("div");
+    detail.style.cssText = "display:none;padding:2px 0 10px 26px;";
+    setting.settingEl.after(detail);
+    const cfg = this.plugin.settings.rules || {};
+    this.ruleRow(detail, "\u8D77\u59CB\u5B57", cfg.prefix || DEFAULT_RULES_CONFIG.prefix, "prefix");
+    if (key === "vol") {
+      this.ruleRow(detail, "\u5377\u7C7B\u6807\u8BC6\u5B57", cfg.volumeUnits || DEFAULT_RULES_CONFIG.volumeUnits, "volumeUnits");
+    } else {
+      this.ruleRow(detail, "\u7AE0\u8282\u7C7B\u6807\u8BC6\u5B57", cfg.chapterUnits || DEFAULT_RULES_CONFIG.chapterUnits, "chapterUnits");
+    }
+    let open = false;
+    caret.addEventListener("click", () => {
+      open = !open;
+      caret.textContent = open ? "\u25BE" : "\u25B8";
+      detail.style.display = open ? "block" : "none";
+    });
+  }
+  ruleRow(parent, label, value, key) {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;align-items:center;gap:8px;margin:6px 0;";
+    const lb = document.createElement("span");
+    lb.textContent = label;
+    lb.style.cssText = "min-width:96px;color:var(--text-muted);font-size:12px;";
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = value;
+    input.style.cssText = "flex:1;max-width:260px;";
+    input.addEventListener("input", () => {
+      this.updateRule(key, input.value);
+    });
+    row.append(lb, input);
+    parent.appendChild(row);
+    if (!this.ruleInputRefs[key]) this.ruleInputRefs[key] = [];
+    this.ruleInputRefs[key].push(input);
+  }
   renderColorGroup(parent, mode) {
     const defaults = THEMES[mode];
     const overrides = this.plugin.settings.colors[mode] || {};
@@ -747,6 +781,7 @@ var HighlightSettingsTab = class extends obsidian.PluginSettingTab {
     for (const key of Object.keys(defaults)) {
       let picker = null;
       const setting = new obsidian.Setting(parent).setName(COLOR_LABELS[key] || key);
+      if (key === "vol" || key === "chapter") this.attachRuleEditor(setting, key);
       const sampleEl = setting.nameEl.createSpan({ cls: "inknote-color-sample" });
       sampleEl.style.cssText = "margin-left:12px;opacity:0.9;font-weight:normal;white-space:pre-wrap;";
       const sample = sampleFor(key);

@@ -86,7 +86,7 @@ Changes apply immediately to open notes: editor decorations are rebuilt and read
 
 Line-level rules follow the template **start char + number + unit char + rest**. Defaults: `第1卷`、`第1章`、`第1回`、`第1节`.
 
-In settings → **特殊规则（自定义匹配字）** you can:
+In settings, click the **▸** arrow at the far left of the **卷标题** / **章节标题** rows to edit the keywords for that group:
 
 - **Start chars** — default `第`; add more (e.g. `第序`) so `序1卷` is highlighted too.
 - **Volume units** — default `卷`; add `幕集篇` so `第1幕` gets the volume style.
@@ -108,8 +108,7 @@ If the same char is added to both unit groups, the volume rule wins. Empty value
 
 ## Changelog
 
-- **v2.0.9** — Custom heading keywords: start chars and unit chars are configurable (e.g. add `幕` and `第1幕` is highlighted), applied instantly.
-- **v2.0.8** — Per-token custom colors for light and dark themes, with a live preview in settings; changes apply to open notes immediately.
+- **v2.0.8** — Per-token custom colors for light and dark themes with a live preview, plus configurable heading keywords (start chars and unit chars; e.g. add `幕` and `第1幕` is highlighted). Settings changes apply to open notes immediately.
 - **v2.0.7** — English-first README (`README.md`), Chinese translation moved to `README.zh.md` (same functionality as 2.0.6).
 - **v2.0.6** — Manifest metadata compliance: Basic Latin name (`InkNote Highlight`) and an English description ending with a period, as required by the community directory (same functionality as 2.0.5).
 - **v2.0.5** — Fixed: text after a URL (`https://...`) was wrongly tinted as a meta value (meta keys are now Chinese-only). Perf: container scanning (code fences / tables) is cached per document text, so scrolling and theme switches no longer rescan the whole note.

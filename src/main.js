@@ -737,38 +737,15 @@ class HighlightSettingsTab extends obsidian.PluginSettingTab {
     super(app, plugin);
     this.plugin = plugin;
     this.previewEls = { light: null, dark: null };
+    this.sampleEls = {};
+    this.ruleInputRefs = { prefix: [], volumeUnits: [], chapterUnits: [] };
   }
 
   display() {
     const { containerEl } = this;
     containerEl.empty();
     this.sampleEls = {};
-
-    // ---- 特殊规则：自定义匹配字 ----
-    containerEl.createEl("h3", { text: "特殊规则（自定义匹配字）" });
-    const ruleHint = containerEl.createEl("p", {
-      text: "行级规则模板：起始字 + 数字 + 标识字 + 其余内容。例如把「幕」加到卷类，「第1幕」也会染色；改起始字可匹配「序1卷」这类写法。同一个字如果同时加进两组，以卷类为准。",
-    });
-    ruleHint.style.color = "var(--text-muted)";
-    const rulesCfg = this.plugin.settings.rules || {};
-    new obsidian.Setting(containerEl)
-      .setName("起始字")
-      .setDesc("默认「第」，可多字（如「第序」）。")
-      .addText((t) => t
-        .setValue(rulesCfg.prefix || DEFAULT_RULES_CONFIG.prefix)
-        .onChange(async (v) => { await this.updateRule("prefix", v); }));
-    new obsidian.Setting(containerEl)
-      .setName("卷类标识字")
-      .setDesc("默认「卷」，可加「幕集篇」等。示例：第1卷、第1幕。")
-      .addText((t) => t
-        .setValue(rulesCfg.volumeUnits || DEFAULT_RULES_CONFIG.volumeUnits)
-        .onChange(async (v) => { await this.updateRule("volumeUnits", v); }));
-    new obsidian.Setting(containerEl)
-      .setName("章节类标识字")
-      .setDesc("默认「回章节」，可加「幕集」等。示例：第1章、第1幕。")
-      .addText((t) => t
-        .setValue(rulesCfg.chapterUnits || DEFAULT_RULES_CONFIG.chapterUnits)
-        .onChange(async (v) => { await this.updateRule("chapterUnits", v); }));
+    this.ruleInputRefs = { prefix: [], volumeUnits: [], chapterUnits: [] };
 
     containerEl.createEl("h3", { text: "实时预览" });
     const wrap = containerEl.createDiv();
@@ -814,9 +791,14 @@ class HighlightSettingsTab extends obsidian.PluginSettingTab {
     s.rules = s.rules || {};
     s.rules[key] = value;
     await this.plugin.saveSettings();
-    applyRulesConfig(s.rules);
+    const applied = applyRulesConfig(s.rules);
     this.plugin.refreshViews();
     this.refreshPreviews();
+    // 同步其他入口的输入框（亮/暗两组各有一份；不打断正在输入的那个）
+    const shown = applied[key];
+    for (const el of this.ruleInputRefs[key] || []) {
+      if (el !== document.activeElement && el.value !== shown) el.value = shown;
+    }
     for (const [k, v] of Object.entries(this.sampleEls || {})) {
       const rulesKey = k.split(":")[1];
       renderSample(v.el, sampleFor(rulesKey), v.mode === "dark");
@@ -834,6 +816,51 @@ class HighlightSettingsTab extends obsidian.PluginSettingTab {
     this.refreshPreviews();
   }
 
+  /** 给「卷标题 / 章节标题」行挂上折叠的规则编辑区（点名称最左侧箭头展开） */
+  attachRuleEditor(setting, key) {
+    const caret = document.createElement("span");
+    caret.textContent = "▸";
+    caret.title = key === "vol" ? "编辑卷类规则的匹配字" : "编辑章节类规则的匹配字";
+    caret.style.cssText = "cursor:pointer;margin-right:6px;user-select:none;opacity:0.75;";
+    setting.nameEl.prepend(caret);
+
+    const detail = document.createElement("div");
+    detail.style.cssText = "display:none;padding:2px 0 10px 26px;";
+    setting.settingEl.after(detail);
+
+    const cfg = this.plugin.settings.rules || {};
+    this.ruleRow(detail, "起始字", cfg.prefix || DEFAULT_RULES_CONFIG.prefix, "prefix");
+    if (key === "vol") {
+      this.ruleRow(detail, "卷类标识字", cfg.volumeUnits || DEFAULT_RULES_CONFIG.volumeUnits, "volumeUnits");
+    } else {
+      this.ruleRow(detail, "章节类标识字", cfg.chapterUnits || DEFAULT_RULES_CONFIG.chapterUnits, "chapterUnits");
+    }
+
+    let open = false;
+    caret.addEventListener("click", () => {
+      open = !open;
+      caret.textContent = open ? "▾" : "▸";
+      detail.style.display = open ? "block" : "none";
+    });
+  }
+
+  ruleRow(parent, label, value, key) {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;align-items:center;gap:8px;margin:6px 0;";
+    const lb = document.createElement("span");
+    lb.textContent = label;
+    lb.style.cssText = "min-width:96px;color:var(--text-muted);font-size:12px;";
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = value;
+    input.style.cssText = "flex:1;max-width:260px;";
+    input.addEventListener("input", () => { this.updateRule(key, input.value); });
+    row.append(lb, input);
+    parent.appendChild(row);
+    if (!this.ruleInputRefs[key]) this.ruleInputRefs[key] = [];
+    this.ruleInputRefs[key].push(input);
+  }
+
   renderColorGroup(parent, mode) {
     const defaults = THEMES[mode];
     const overrides = this.plugin.settings.colors[mode] || {};
@@ -841,6 +868,9 @@ class HighlightSettingsTab extends obsidian.PluginSettingTab {
     for (const key of Object.keys(defaults)) {
       let picker = null;
       const setting = new obsidian.Setting(parent).setName(COLOR_LABELS[key] || key);
+
+      // 卷 / 章：名称最左侧加折叠箭头，展开后编辑该类规则的匹配字
+      if (key === "vol" || key === "chapter") this.attachRuleEditor(setting, key);
 
       // 名称后面的逐项实时示例：直接显示该 token 当前颜色/样式的效果
       const sampleEl = setting.nameEl.createSpan({ cls: "inknote-color-sample" });
