@@ -59,6 +59,43 @@ function applyColorOverrides(overrides) {
   return activeThemes;
 }
 
+// ---------- 特殊规则配置（用户可加匹配字） ----------
+// 行级规则模板：起始字 + 数字 + 标识字 + 其余内容
+//   默认：第1卷 / 第1章 / 第1回 / 第1节
+//   用户可把「幕」「集」「篇」等加到卷类或章节类，也可换起始字（如「序」）。
+const DEFAULT_RULES_CONFIG = {
+  prefix: "第",           // 起始字（字符类，可多个）
+  volumeUnits: "卷",      // 卷类标识字
+  chapterUnits: "回章节",  // 章节类标识字
+};
+let activeRulesConfig = { ...DEFAULT_RULES_CONFIG };
+
+/** 字符类内部转义（防止用户输入 ] - ^ \ 破坏正则） */
+function charClassEscape(chars) {
+  return String(chars || "").replace(/[\\\]^\-]/g, "\\$&");
+}
+
+function applyRulesConfig(cfg) {
+  const c = Object.assign({}, DEFAULT_RULES_CONFIG, cfg || {});
+  if (!String(c.prefix || "").trim()) c.prefix = DEFAULT_RULES_CONFIG.prefix;
+  if (!String(c.volumeUnits || "").trim()) c.volumeUnits = DEFAULT_RULES_CONFIG.volumeUnits;
+  if (!String(c.chapterUnits || "").trim()) c.chapterUnits = DEFAULT_RULES_CONFIG.chapterUnits;
+  activeRulesConfig = {
+    prefix: c.prefix.trim(),
+    volumeUnits: c.volumeUnits.trim(),
+    chapterUnits: c.chapterUnits.trim(),
+  };
+  return activeRulesConfig;
+}
+
+/** 生成「起始字 + 数字 + 标识字 + 其余」的行级正则 */
+function makeHeadingLineRe(prefix, units) {
+  return new RegExp(
+    `^[${charClassEscape(prefix)}][零一二三四五六七八九十百千0-9]+[${charClassEscape(units)}].*$`,
+    "gm"
+  );
+}
+
 // ---------- 规则表 ----------
 // 每条规则：
 //   re    : 正则（行级规则带 m 标志，^ $ 锚定行；行内规则不带）
@@ -71,8 +108,9 @@ function applyColorOverrides(overrides) {
 function buildRules(t) {
   return [
     // ===== 行级规则（整行语义） =====
-    { name: "vol",        re: /^第[零一二三四五六七八九十百千0-9]+卷.*$/gm, style: { color: t.vol, bold: true, sizeDelta: 4 } },
-    { name: "chapter",    re: /^第[零一二三四五六七八九十百千0-9]+[回章节].*$/gm, style: { color: t.chapter, bold: true, sizeDelta: 2 } },
+    // 卷/章节：起始字 + 数字 + 标识字（可在设置里增改，如「幕」「集」「篇」）
+    { name: "vol",        re: makeHeadingLineRe(activeRulesConfig.prefix, activeRulesConfig.volumeUnits), style: { color: t.vol, bold: true, sizeDelta: 4 } },
+    { name: "chapter",    re: makeHeadingLineRe(activeRulesConfig.prefix, activeRulesConfig.chapterUnits), style: { color: t.chapter, bold: true, sizeDelta: 2 } },
     // 小节标题：数字+空格（1 引言）。数字+点/顿号（1. 1、）走 orderedMark，避免混色
     { name: "numSection", re: /^\s*\d{1,3}[ \t]+[^\n]+$/gm, style: { color: t.section, bold: true } },
     { name: "bareSection", re: /^\s*(?:简介|序|序言|前言|目录|后记|附录|凡例|校注凡例|说明|摘要|导读)\s*$/gm, style: { color: t.section, bold: true } },
@@ -488,9 +526,11 @@ const editingPlugin = ViewPlugin.fromClass(
 // ---------- 插件入口 ----------
 module.exports = class InknoteHighlight extends obsidian.Plugin {
   async onload() {
-    this.settings = Object.assign({ colors: { light: {}, dark: {} } }, await this.loadData());
+    this.settings = Object.assign({ colors: { light: {}, dark: {} }, rules: {} }, await this.loadData());
     if (!this.settings.colors) this.settings.colors = { light: {}, dark: {} };
+    if (!this.settings.rules) this.settings.rules = {};
     applyColorOverrides(this.settings.colors);
+    applyRulesConfig(this.settings.rules);
 
     this.registerMarkdownPostProcessor(readingProcessor);
     this.registerEditorExtension(editingPlugin);
@@ -630,7 +670,6 @@ const COLOR_SAMPLES = {
   bracket: "【方括号】",
 };
 
-// 用 buildTokens 渲染一段示例，保证预览与真实渲染完全一致（含粗体/字号等属性）
 function renderSample(el, sample, isDark) {
   if (!el) return;
   el.empty();
@@ -648,6 +687,14 @@ function renderSample(el, sample, isDark) {
     if (tk.mono) span.style.setProperty("font-family", "var(--font-monospace)", "important");
     el.appendChild(span);
   }
+}
+
+// 逐项示例：vol/chapter 跟随用户配置动态生成（用户可能把「卷」换成「幕」），其余用固定示例
+function sampleFor(key) {
+  const p = (activeRulesConfig.prefix || "第")[0];
+  if (key === "vol") return `${p}1${(activeRulesConfig.volumeUnits || "卷")[0]} 风起`;
+  if (key === "chapter") return `${p}1${(activeRulesConfig.chapterUnits || "章")[0]} 开端`;
+  return COLOR_SAMPLES[key] || key;
 }
 
 function renderPreview(container, isDark) {
@@ -695,6 +742,33 @@ class HighlightSettingsTab extends obsidian.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
+    this.sampleEls = {};
+
+    // ---- 特殊规则：自定义匹配字 ----
+    containerEl.createEl("h3", { text: "特殊规则（自定义匹配字）" });
+    const ruleHint = containerEl.createEl("p", {
+      text: "行级规则模板：起始字 + 数字 + 标识字 + 其余内容。例如把「幕」加到卷类，「第1幕」也会染色；改起始字可匹配「序1卷」这类写法。同一个字如果同时加进两组，以卷类为准。",
+    });
+    ruleHint.style.color = "var(--text-muted)";
+    const rulesCfg = this.plugin.settings.rules || {};
+    new obsidian.Setting(containerEl)
+      .setName("起始字")
+      .setDesc("默认「第」，可多字（如「第序」）。")
+      .addText((t) => t
+        .setValue(rulesCfg.prefix || DEFAULT_RULES_CONFIG.prefix)
+        .onChange(async (v) => { await this.updateRule("prefix", v); }));
+    new obsidian.Setting(containerEl)
+      .setName("卷类标识字")
+      .setDesc("默认「卷」，可加「幕集篇」等。示例：第1卷、第1幕。")
+      .addText((t) => t
+        .setValue(rulesCfg.volumeUnits || DEFAULT_RULES_CONFIG.volumeUnits)
+        .onChange(async (v) => { await this.updateRule("volumeUnits", v); }));
+    new obsidian.Setting(containerEl)
+      .setName("章节类标识字")
+      .setDesc("默认「回章节」，可加「幕集」等。示例：第1章、第1幕。")
+      .addText((t) => t
+        .setValue(rulesCfg.chapterUnits || DEFAULT_RULES_CONFIG.chapterUnits)
+        .onChange(async (v) => { await this.updateRule("chapterUnits", v); }));
 
     containerEl.createEl("h3", { text: "实时预览" });
     const wrap = containerEl.createDiv();
@@ -734,6 +808,21 @@ class HighlightSettingsTab extends obsidian.PluginSettingTab {
     renderPreview(this.previewEls.dark, true);
   }
 
+  /** 修改特殊规则（起始字 / 标识字）：保存 → 应用 → 刷新视图与示例 */
+  async updateRule(key, value) {
+    const s = this.plugin.settings;
+    s.rules = s.rules || {};
+    s.rules[key] = value;
+    await this.plugin.saveSettings();
+    applyRulesConfig(s.rules);
+    this.plugin.refreshViews();
+    this.refreshPreviews();
+    for (const [k, v] of Object.entries(this.sampleEls || {})) {
+      const rulesKey = k.split(":")[1];
+      renderSample(v.el, sampleFor(rulesKey), v.mode === "dark");
+    }
+  }
+
   async applyChange(mode, key, value) {
     const colors = this.plugin.settings.colors;
     colors[mode] = colors[mode] || {};
@@ -756,7 +845,8 @@ class HighlightSettingsTab extends obsidian.PluginSettingTab {
       // 名称后面的逐项实时示例：直接显示该 token 当前颜色/样式的效果
       const sampleEl = setting.nameEl.createSpan({ cls: "inknote-color-sample" });
       sampleEl.style.cssText = "margin-left:12px;opacity:0.9;font-weight:normal;white-space:pre-wrap;";
-      const sample = COLOR_SAMPLES[key] || key;
+      const sample = sampleFor(key);
+      this.sampleEls[mode + ":" + key] = { el: sampleEl, mode };
       renderSample(sampleEl, sample, isDark);
 
       setting
@@ -785,6 +875,11 @@ module.exports.__test = {
   THEMES,
   applyColorOverrides,
   getActiveThemes: () => activeThemes,
+  applyRulesConfig,
+  getRulesConfig: () => activeRulesConfig,
+  DEFAULT_RULES_CONFIG,
+  makeHeadingLineRe,
+  sampleFor,
   COLOR_SAMPLES,
   COLOR_LABELS,
   PREVIEW_TEXT,

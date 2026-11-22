@@ -82,6 +82,18 @@ Settings → **InkNote Highlight** opens a panel with a **live preview** of both
 
 Changes apply immediately to open notes: editor decorations are rebuilt and reading views re-render. Overrides live in the plugin's `data.json` under `colors.light` / `colors.dark` — only the keys you changed are stored, so future updates to the default palette still reach you.
 
+## Custom heading keywords
+
+Line-level rules follow the template **start char + number + unit char + rest**. Defaults: `第1卷`、`第1章`、`第1回`、`第1节`.
+
+In settings → **特殊规则（自定义匹配字）** you can:
+
+- **Start chars** — default `第`; add more (e.g. `第序`) so `序1卷` is highlighted too.
+- **Volume units** — default `卷`; add `幕集篇` so `第1幕` gets the volume style.
+- **Chapter units** — default `回章节`; add `幕集` as needed.
+
+If the same char is added to both unit groups, the volume rule wins. Empty values fall back to the defaults, and special characters in your input are escaped before being used in the pattern.
+
 ## Repository layout
 
 | Path | Purpose |
@@ -96,6 +108,7 @@ Changes apply immediately to open notes: editor decorations are rebuilt and read
 
 ## Changelog
 
+- **v2.0.9** — Custom heading keywords: start chars and unit chars are configurable (e.g. add `幕` and `第1幕` is highlighted), applied instantly.
 - **v2.0.8** — Per-token custom colors for light and dark themes, with a live preview in settings; changes apply to open notes immediately.
 - **v2.0.7** — English-first README (`README.md`), Chinese translation moved to `README.zh.md` (same functionality as 2.0.6).
 - **v2.0.6** — Manifest metadata compliance: Basic Latin name (`InkNote Highlight`) and an English description ending with a period, as required by the community directory (same functionality as 2.0.5).

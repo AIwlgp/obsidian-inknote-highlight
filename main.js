@@ -78,11 +78,42 @@ function applyColorOverrides(overrides) {
   };
   return activeThemes;
 }
+var DEFAULT_RULES_CONFIG = {
+  prefix: "\u7B2C",
+  // 起始字（字符类，可多个）
+  volumeUnits: "\u5377",
+  // 卷类标识字
+  chapterUnits: "\u56DE\u7AE0\u8282"
+  // 章节类标识字
+};
+var activeRulesConfig = { ...DEFAULT_RULES_CONFIG };
+function charClassEscape(chars) {
+  return String(chars || "").replace(/[\\\]^\-]/g, "\\$&");
+}
+function applyRulesConfig(cfg) {
+  const c = Object.assign({}, DEFAULT_RULES_CONFIG, cfg || {});
+  if (!String(c.prefix || "").trim()) c.prefix = DEFAULT_RULES_CONFIG.prefix;
+  if (!String(c.volumeUnits || "").trim()) c.volumeUnits = DEFAULT_RULES_CONFIG.volumeUnits;
+  if (!String(c.chapterUnits || "").trim()) c.chapterUnits = DEFAULT_RULES_CONFIG.chapterUnits;
+  activeRulesConfig = {
+    prefix: c.prefix.trim(),
+    volumeUnits: c.volumeUnits.trim(),
+    chapterUnits: c.chapterUnits.trim()
+  };
+  return activeRulesConfig;
+}
+function makeHeadingLineRe(prefix, units) {
+  return new RegExp(
+    `^[${charClassEscape(prefix)}][\u96F6\u4E00\u4E8C\u4E09\u56DB\u4E94\u516D\u4E03\u516B\u4E5D\u5341\u767E\u53430-9]+[${charClassEscape(units)}].*$`,
+    "gm"
+  );
+}
 function buildRules(t) {
   return [
     // ===== 行级规则（整行语义） =====
-    { name: "vol", re: /^第[零一二三四五六七八九十百千0-9]+卷.*$/gm, style: { color: t.vol, bold: true, sizeDelta: 4 } },
-    { name: "chapter", re: /^第[零一二三四五六七八九十百千0-9]+[回章节].*$/gm, style: { color: t.chapter, bold: true, sizeDelta: 2 } },
+    // 卷/章节：起始字 + 数字 + 标识字（可在设置里增改，如「幕」「集」「篇」）
+    { name: "vol", re: makeHeadingLineRe(activeRulesConfig.prefix, activeRulesConfig.volumeUnits), style: { color: t.vol, bold: true, sizeDelta: 4 } },
+    { name: "chapter", re: makeHeadingLineRe(activeRulesConfig.prefix, activeRulesConfig.chapterUnits), style: { color: t.chapter, bold: true, sizeDelta: 2 } },
     // 小节标题：数字+空格（1 引言）。数字+点/顿号（1. 1、）走 orderedMark，避免混色
     { name: "numSection", re: /^\s*\d{1,3}[ \t]+[^\n]+$/gm, style: { color: t.section, bold: true } },
     { name: "bareSection", re: /^\s*(?:简介|序|序言|前言|目录|后记|附录|凡例|校注凡例|说明|摘要|导读)\s*$/gm, style: { color: t.section, bold: true } },
@@ -444,9 +475,11 @@ var editingPlugin = ViewPlugin.fromClass(
 );
 module.exports = class InknoteHighlight extends obsidian.Plugin {
   async onload() {
-    this.settings = Object.assign({ colors: { light: {}, dark: {} } }, await this.loadData());
+    this.settings = Object.assign({ colors: { light: {}, dark: {} }, rules: {} }, await this.loadData());
     if (!this.settings.colors) this.settings.colors = { light: {}, dark: {} };
+    if (!this.settings.rules) this.settings.rules = {};
     applyColorOverrides(this.settings.colors);
+    applyRulesConfig(this.settings.rules);
     this.registerMarkdownPostProcessor(readingProcessor);
     this.registerEditorExtension(editingPlugin);
     this.addSettingTab(new HighlightSettingsTab(this.app, this));
@@ -587,6 +620,12 @@ function renderSample(el, sample, isDark) {
     el.appendChild(span);
   }
 }
+function sampleFor(key) {
+  const p = (activeRulesConfig.prefix || "\u7B2C")[0];
+  if (key === "vol") return `${p}1${(activeRulesConfig.volumeUnits || "\u5377")[0]} \u98CE\u8D77`;
+  if (key === "chapter") return `${p}1${(activeRulesConfig.chapterUnits || "\u7AE0")[0]} \u5F00\u7AEF`;
+  return COLOR_SAMPLES[key] || key;
+}
 function renderPreview(container, isDark) {
   if (!container) return;
   container.empty();
@@ -630,6 +669,22 @@ var HighlightSettingsTab = class extends obsidian.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
+    this.sampleEls = {};
+    containerEl.createEl("h3", { text: "\u7279\u6B8A\u89C4\u5219\uFF08\u81EA\u5B9A\u4E49\u5339\u914D\u5B57\uFF09" });
+    const ruleHint = containerEl.createEl("p", {
+      text: "\u884C\u7EA7\u89C4\u5219\u6A21\u677F\uFF1A\u8D77\u59CB\u5B57 + \u6570\u5B57 + \u6807\u8BC6\u5B57 + \u5176\u4F59\u5185\u5BB9\u3002\u4F8B\u5982\u628A\u300C\u5E55\u300D\u52A0\u5230\u5377\u7C7B\uFF0C\u300C\u7B2C1\u5E55\u300D\u4E5F\u4F1A\u67D3\u8272\uFF1B\u6539\u8D77\u59CB\u5B57\u53EF\u5339\u914D\u300C\u5E8F1\u5377\u300D\u8FD9\u7C7B\u5199\u6CD5\u3002\u540C\u4E00\u4E2A\u5B57\u5982\u679C\u540C\u65F6\u52A0\u8FDB\u4E24\u7EC4\uFF0C\u4EE5\u5377\u7C7B\u4E3A\u51C6\u3002"
+    });
+    ruleHint.style.color = "var(--text-muted)";
+    const rulesCfg = this.plugin.settings.rules || {};
+    new obsidian.Setting(containerEl).setName("\u8D77\u59CB\u5B57").setDesc("\u9ED8\u8BA4\u300C\u7B2C\u300D\uFF0C\u53EF\u591A\u5B57\uFF08\u5982\u300C\u7B2C\u5E8F\u300D\uFF09\u3002").addText((t) => t.setValue(rulesCfg.prefix || DEFAULT_RULES_CONFIG.prefix).onChange(async (v) => {
+      await this.updateRule("prefix", v);
+    }));
+    new obsidian.Setting(containerEl).setName("\u5377\u7C7B\u6807\u8BC6\u5B57").setDesc("\u9ED8\u8BA4\u300C\u5377\u300D\uFF0C\u53EF\u52A0\u300C\u5E55\u96C6\u7BC7\u300D\u7B49\u3002\u793A\u4F8B\uFF1A\u7B2C1\u5377\u3001\u7B2C1\u5E55\u3002").addText((t) => t.setValue(rulesCfg.volumeUnits || DEFAULT_RULES_CONFIG.volumeUnits).onChange(async (v) => {
+      await this.updateRule("volumeUnits", v);
+    }));
+    new obsidian.Setting(containerEl).setName("\u7AE0\u8282\u7C7B\u6807\u8BC6\u5B57").setDesc("\u9ED8\u8BA4\u300C\u56DE\u7AE0\u8282\u300D\uFF0C\u53EF\u52A0\u300C\u5E55\u96C6\u300D\u7B49\u3002\u793A\u4F8B\uFF1A\u7B2C1\u7AE0\u3001\u7B2C1\u5E55\u3002").addText((t) => t.setValue(rulesCfg.chapterUnits || DEFAULT_RULES_CONFIG.chapterUnits).onChange(async (v) => {
+      await this.updateRule("chapterUnits", v);
+    }));
     containerEl.createEl("h3", { text: "\u5B9E\u65F6\u9884\u89C8" });
     const wrap = containerEl.createDiv();
     wrap.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px;";
@@ -661,6 +716,20 @@ var HighlightSettingsTab = class extends obsidian.PluginSettingTab {
     renderPreview(this.previewEls.light, false);
     renderPreview(this.previewEls.dark, true);
   }
+  /** 修改特殊规则（起始字 / 标识字）：保存 → 应用 → 刷新视图与示例 */
+  async updateRule(key, value) {
+    const s = this.plugin.settings;
+    s.rules = s.rules || {};
+    s.rules[key] = value;
+    await this.plugin.saveSettings();
+    applyRulesConfig(s.rules);
+    this.plugin.refreshViews();
+    this.refreshPreviews();
+    for (const [k, v] of Object.entries(this.sampleEls || {})) {
+      const rulesKey = k.split(":")[1];
+      renderSample(v.el, sampleFor(rulesKey), v.mode === "dark");
+    }
+  }
   async applyChange(mode, key, value) {
     const colors = this.plugin.settings.colors;
     colors[mode] = colors[mode] || {};
@@ -680,7 +749,8 @@ var HighlightSettingsTab = class extends obsidian.PluginSettingTab {
       const setting = new obsidian.Setting(parent).setName(COLOR_LABELS[key] || key);
       const sampleEl = setting.nameEl.createSpan({ cls: "inknote-color-sample" });
       sampleEl.style.cssText = "margin-left:12px;opacity:0.9;font-weight:normal;white-space:pre-wrap;";
-      const sample = COLOR_SAMPLES[key] || key;
+      const sample = sampleFor(key);
+      this.sampleEls[mode + ":" + key] = { el: sampleEl, mode };
       renderSample(sampleEl, sample, isDark);
       setting.addColorPicker((cp) => {
         picker = cp;
@@ -700,6 +770,11 @@ module.exports.__test = {
   THEMES,
   applyColorOverrides,
   getActiveThemes: () => activeThemes,
+  applyRulesConfig,
+  getRulesConfig: () => activeRulesConfig,
+  DEFAULT_RULES_CONFIG,
+  makeHeadingLineRe,
+  sampleFor,
   COLOR_SAMPLES,
   COLOR_LABELS,
   PREVIEW_TEXT,

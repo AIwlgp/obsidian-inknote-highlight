@@ -259,3 +259,82 @@ test('设置页示例：每个颜色键都有标签和示例', () => {
     assert.ok(T.COLOR_SAMPLES[key], '缺少示例: ' + key);
   }
 });
+
+// ---------- 特殊规则（自定义匹配字） ----------
+
+function volColor(line) {
+  const tk = T.buildTokens(line, false).find((x) => x.color === T.THEMES.light.vol);
+  return !!tk;
+}
+function chapterColor(line) {
+  const tk = T.buildTokens(line, false).find((x) => x.color === T.THEMES.light.chapter);
+  return !!tk;
+}
+
+test('特殊规则：默认只认「卷」和「回章节」', () => {
+  try {
+    T.applyRulesConfig({});
+    assert.ok(volColor('第1卷 风起'), '第1卷 应被 vol 染色');
+    assert.ok(!volColor('第1幕 开场'), '第1幕 默认不该被 vol 染色');
+    assert.ok(chapterColor('第1章 开端'));
+    assert.ok(chapterColor('第1回 开端'));
+    assert.ok(!chapterColor('第1幕 开场'));
+  } finally {
+    T.applyRulesConfig({});
+  }
+});
+
+test('特殊规则：把「幕」加到卷类后，第1幕 也能染色', () => {
+  try {
+    T.applyRulesConfig({ volumeUnits: '卷幕' });
+    assert.ok(volColor('第1幕 开场'), '第1幕 应被 vol 染色');
+    assert.ok(volColor('第1卷 风起'), '第1卷 仍应染色');
+    assert.ok(!chapterColor('第1幕 开场'), '幕只加在卷类时不应被 chapter 染色');
+  } finally {
+    T.applyRulesConfig({});
+  }
+});
+
+test('特殊规则：改起始字（序）后，序1卷 也能染色', () => {
+  try {
+    T.applyRulesConfig({ prefix: '第序' });
+    assert.ok(volColor('序1卷 开端'), '序1卷 应被 vol 染色');
+    assert.ok(volColor('第1卷 风起'), '第1卷 仍应染色（前缀是多字字符类）');
+  } finally {
+    T.applyRulesConfig({});
+  }
+});
+
+test('特殊规则：空白值回退默认，不会生成非法正则', () => {
+  try {
+    T.applyRulesConfig({ prefix: '  ', volumeUnits: '', chapterUnits: '   ' });
+    const cfg = T.getRulesConfig();
+    assert.strictEqual(cfg.prefix, T.DEFAULT_RULES_CONFIG.prefix);
+    assert.strictEqual(cfg.volumeUnits, T.DEFAULT_RULES_CONFIG.volumeUnits);
+    assert.strictEqual(cfg.chapterUnits, T.DEFAULT_RULES_CONFIG.chapterUnits);
+    assert.ok(volColor('第1卷 风起'));
+  } finally {
+    T.applyRulesConfig({});
+  }
+});
+
+test('特殊规则：用户输入含正则特殊字符时不崩', () => {
+  try {
+    T.applyRulesConfig({ volumeUnits: '卷]幕[篇' });
+    // 不抛异常即可；「]」「[」被正确转义进字符类
+    assert.doesNotThrow(() => T.buildTokens('第1] 风起', false));
+    assert.doesNotThrow(() => T.buildTokens('第1卷 风起', false));
+  } finally {
+    T.applyRulesConfig({});
+  }
+});
+
+test('特殊规则：vol/chapter 示例跟随配置变化', () => {
+  try {
+    T.applyRulesConfig({ volumeUnits: '幕', chapterUnits: '集' });
+    assert.ok(T.sampleFor('vol').includes('幕'), 'vol 示例应含当前卷类首字');
+    assert.ok(T.sampleFor('chapter').includes('集'), 'chapter 示例应含当前章节类首字');
+  } finally {
+    T.applyRulesConfig({});
+  }
+});
