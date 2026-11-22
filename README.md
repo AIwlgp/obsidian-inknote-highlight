@@ -14,7 +14,7 @@ Two kinds of rules, colored by "innermost wins" + "attributes stack":
 
 - `第X卷` / `第X回/章/节` lines (volume / chapter headings)
 - Numeric section headings (`1 引言`) and fixed headings (`简介`, `序`, `前言`, `附录`, …)
-- `key：value` meta pairs (`作者：鲁迅`)
+- `key：value` meta pairs (`作者：aiwlgp`; preview text is taken from the author's novel 《梦境四重奏》)
 - Horizontal rules, `#` headings (color progresses by level), blockquotes (`>`), italic annotation lines (`*设计原理：…`)
 - List / task-list / ordered-list markers, Chinese ordinals (`一、`, `（一）`)
 
