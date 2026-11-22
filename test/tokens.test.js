@@ -351,3 +351,47 @@ test('顶部整体预览跟随规则变化（卷/章两行）', () => {
     T.applyRulesConfig({});
   }
 });
+
+test('特殊规则：词组用 / 分隔（我/章节/章/节）', () => {
+  try {
+    T.applyRulesConfig({ chapterUnits: '我/章节/章/节' });
+    assert.ok(chapterColor('第1我 开端'), '第1我 应匹配');
+    assert.ok(chapterColor('第1章节 开端'), '第1章节 应匹配（词组）');
+    assert.ok(chapterColor('第1章 开端'), '第1章 应匹配');
+    assert.ok(chapterColor('第1节 开端'), '第1节 应匹配');
+    assert.ok(!chapterColor('第1回 开端'), '第1回 不在列表里，不应匹配');
+  } finally {
+    T.applyRulesConfig({});
+  }
+});
+
+test('特殊规则：卷类也支持 / 分隔词组', () => {
+  try {
+    T.applyRulesConfig({ volumeUnits: '卷/幕' });
+    assert.ok(volColor('第1卷 风起'));
+    assert.ok(volColor('第1幕 开场'));
+  } finally {
+    T.applyRulesConfig({});
+  }
+});
+
+test('特殊规则：只有斜杠时回退默认值', () => {
+  try {
+    T.applyRulesConfig({ chapterUnits: '/', volumeUnits: '／' });
+    const cfg = T.getRulesConfig();
+    assert.strictEqual(cfg.chapterUnits, T.DEFAULT_RULES_CONFIG.chapterUnits);
+    assert.strictEqual(cfg.volumeUnits, T.DEFAULT_RULES_CONFIG.volumeUnits);
+  } finally {
+    T.applyRulesConfig({});
+  }
+});
+
+test('特殊规则：词组配置下示例与预览取首项', () => {
+  try {
+    T.applyRulesConfig({ chapterUnits: '我/章节' });
+    assert.ok(T.sampleFor('chapter').includes('我'), '示例应取第一个选项');
+    assert.ok(T.buildPreviewText().includes('第1我'), '预览首行应取第一个选项');
+  } finally {
+    T.applyRulesConfig({});
+  }
+});

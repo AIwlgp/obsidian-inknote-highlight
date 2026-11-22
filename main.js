@@ -87,26 +87,34 @@ var DEFAULT_RULES_CONFIG = {
   // 章节类标识字
 };
 var activeRulesConfig = { ...DEFAULT_RULES_CONFIG };
-function charClassEscape(chars) {
-  return String(chars || "").replace(/[\\\]^\-]/g, "\\$&");
+function escapeRegExp(s) {
+  return String(s || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function parseUnitOptions(input) {
+  const s = String(input || "").trim();
+  if (!s) return [];
+  if (/[\/／]/.test(s)) {
+    return s.split(/[\/／]/).map((x) => x.trim()).filter(Boolean);
+  }
+  return Array.from(s);
 }
 function applyRulesConfig(cfg) {
   const c = Object.assign({}, DEFAULT_RULES_CONFIG, cfg || {});
-  if (!String(c.prefix || "").trim()) c.prefix = DEFAULT_RULES_CONFIG.prefix;
-  if (!String(c.volumeUnits || "").trim()) c.volumeUnits = DEFAULT_RULES_CONFIG.volumeUnits;
-  if (!String(c.chapterUnits || "").trim()) c.chapterUnits = DEFAULT_RULES_CONFIG.chapterUnits;
+  const fix = (v, def) => parseUnitOptions(v).length ? String(v).trim() : def;
   activeRulesConfig = {
-    prefix: c.prefix.trim(),
-    volumeUnits: c.volumeUnits.trim(),
-    chapterUnits: c.chapterUnits.trim()
+    prefix: fix(c.prefix, DEFAULT_RULES_CONFIG.prefix),
+    volumeUnits: fix(c.volumeUnits, DEFAULT_RULES_CONFIG.volumeUnits),
+    chapterUnits: fix(c.chapterUnits, DEFAULT_RULES_CONFIG.chapterUnits)
   };
   return activeRulesConfig;
 }
 function makeHeadingLineRe(prefix, units) {
-  return new RegExp(
-    `^[${charClassEscape(prefix)}][\u96F6\u4E00\u4E8C\u4E09\u56DB\u4E94\u516D\u4E03\u516B\u4E5D\u5341\u767E\u53430-9]+[${charClassEscape(units)}].*$`,
-    "gm"
-  );
+  const pOpts = parseUnitOptions(prefix).sort((a, b) => b.length - a.length);
+  const uOpts = parseUnitOptions(units).sort((a, b) => b.length - a.length);
+  if (!pOpts.length || !uOpts.length) return null;
+  const p = `(?:${pOpts.map(escapeRegExp).join("|")})`;
+  const u = `(?:${uOpts.map(escapeRegExp).join("|")})`;
+  return new RegExp(`^${p}[\u96F6\u4E00\u4E8C\u4E09\u56DB\u4E94\u516D\u4E03\u516B\u4E5D\u5341\u767E\u53430-9]+${u}.*$`, "gm");
 }
 function buildRules(t) {
   return [
@@ -546,9 +554,9 @@ var COLOR_LABELS = {
 };
 function buildPreviewText() {
   const cfg = activeRulesConfig;
-  const p = (cfg.prefix || "\u7B2C")[0];
-  const vu = (cfg.volumeUnits || "\u5377")[0];
-  const cu = (cfg.chapterUnits || "\u7AE0")[0];
+  const p = parseUnitOptions(cfg.prefix)[0] || "\u7B2C";
+  const vu = parseUnitOptions(cfg.volumeUnits)[0] || "\u5377";
+  const cu = parseUnitOptions(cfg.chapterUnits)[0] || "\u7AE0";
   return [
     `${p}1${vu} \u98CE\u8D77`,
     `${p}1${cu} \u5F00\u7AEF`,
@@ -627,9 +635,10 @@ function renderSample(el, sample, isDark) {
   }
 }
 function sampleFor(key) {
-  const p = (activeRulesConfig.prefix || "\u7B2C")[0];
-  if (key === "vol") return `${p}1${(activeRulesConfig.volumeUnits || "\u5377")[0]} \u98CE\u8D77`;
-  if (key === "chapter") return `${p}1${(activeRulesConfig.chapterUnits || "\u7AE0")[0]} \u5F00\u7AEF`;
+  const cfg = activeRulesConfig;
+  const p = parseUnitOptions(cfg.prefix)[0] || "\u7B2C";
+  if (key === "vol") return `${p}1${parseUnitOptions(cfg.volumeUnits)[0] || "\u5377"} \u98CE\u8D77`;
+  if (key === "chapter") return `${p}1${parseUnitOptions(cfg.chapterUnits)[0] || "\u7AE0"} \u5F00\u7AEF`;
   return COLOR_SAMPLES[key] || key;
 }
 function renderPreview(container, isDark) {
@@ -748,6 +757,10 @@ var HighlightSettingsTab = class extends obsidian.PluginSettingTab {
     const detail = document.createElement("div");
     detail.style.cssText = "display:none;padding:2px 0 10px 26px;";
     setting.settingEl.after(detail);
+    const hint = document.createElement("div");
+    hint.textContent = "\u5355\u5B57\u76F4\u63A5\u5199\uFF1B\u8BCD\u7EC4\u7528 / \u5206\u9694\uFF0C\u5982 \u6211/\u7AE0\u8282/\u7AE0/\u8282\uFF08\u957F\u8BCD\u4F18\u5148\u5339\u914D\uFF09";
+    hint.style.cssText = "color:var(--text-muted);font-size:11px;margin:2px 0 4px;";
+    detail.appendChild(hint);
     const cfg = this.plugin.settings.rules || {};
     this.ruleRow(detail, "\u8D77\u59CB\u5B57", cfg.prefix || DEFAULT_RULES_CONFIG.prefix, "prefix");
     if (key === "vol") {

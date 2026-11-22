@@ -70,30 +70,44 @@ const DEFAULT_RULES_CONFIG = {
 };
 let activeRulesConfig = { ...DEFAULT_RULES_CONFIG };
 
-/** 字符类内部转义（防止用户输入 ] - ^ \ 破坏正则） */
-function charClassEscape(chars) {
-  return String(chars || "").replace(/[\\\]^\-]/g, "\\$&");
+/** 通用正则转义 */
+function escapeRegExp(s) {
+  return String(s || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * 解析「起始字 / 标识字」输入：
+ *   - 含 /（或 ／）→ 按词组拆：`我/章节/章/节` → ["我","章节","章","节"]
+ *   - 不含 / → 逐字拆（兼容旧写法）：`我章回节` → ["我","章","回","节"]
+ */
+function parseUnitOptions(input) {
+  const s = String(input || "").trim();
+  if (!s) return [];
+  if (/[\/／]/.test(s)) {
+    return s.split(/[\/／]/).map((x) => x.trim()).filter(Boolean);
+  }
+  return Array.from(s);
 }
 
 function applyRulesConfig(cfg) {
   const c = Object.assign({}, DEFAULT_RULES_CONFIG, cfg || {});
-  if (!String(c.prefix || "").trim()) c.prefix = DEFAULT_RULES_CONFIG.prefix;
-  if (!String(c.volumeUnits || "").trim()) c.volumeUnits = DEFAULT_RULES_CONFIG.volumeUnits;
-  if (!String(c.chapterUnits || "").trim()) c.chapterUnits = DEFAULT_RULES_CONFIG.chapterUnits;
+  const fix = (v, def) => (parseUnitOptions(v).length ? String(v).trim() : def);
   activeRulesConfig = {
-    prefix: c.prefix.trim(),
-    volumeUnits: c.volumeUnits.trim(),
-    chapterUnits: c.chapterUnits.trim(),
+    prefix: fix(c.prefix, DEFAULT_RULES_CONFIG.prefix),
+    volumeUnits: fix(c.volumeUnits, DEFAULT_RULES_CONFIG.volumeUnits),
+    chapterUnits: fix(c.chapterUnits, DEFAULT_RULES_CONFIG.chapterUnits),
   };
   return activeRulesConfig;
 }
 
-/** 生成「起始字 + 数字 + 标识字 + 其余」的行级正则 */
+/** 生成「起始字 + 数字 + 标识字 + 其余」的行级正则；支持多字词组，长词优先匹配 */
 function makeHeadingLineRe(prefix, units) {
-  return new RegExp(
-    `^[${charClassEscape(prefix)}][零一二三四五六七八九十百千0-9]+[${charClassEscape(units)}].*$`,
-    "gm"
-  );
+  const pOpts = parseUnitOptions(prefix).sort((a, b) => b.length - a.length);
+  const uOpts = parseUnitOptions(units).sort((a, b) => b.length - a.length);
+  if (!pOpts.length || !uOpts.length) return null;
+  const p = `(?:${pOpts.map(escapeRegExp).join("|")})`;
+  const u = `(?:${uOpts.map(escapeRegExp).join("|")})`;
+  return new RegExp(`^${p}[零一二三四五六七八九十百千0-9]+${u}.*$`, "gm");
 }
 
 // ---------- 规则表 ----------
@@ -611,9 +625,9 @@ const COLOR_LABELS = {
 // 这样把「卷」换成「幕」后，预览里会显示「第1幕 风起」而不是写死的「第1卷」。
 function buildPreviewText() {
   const cfg = activeRulesConfig;
-  const p = (cfg.prefix || "第")[0];
-  const vu = (cfg.volumeUnits || "卷")[0];
-  const cu = (cfg.chapterUnits || "章")[0];
+  const p = parseUnitOptions(cfg.prefix)[0] || "第";
+  const vu = parseUnitOptions(cfg.volumeUnits)[0] || "卷";
+  const cu = parseUnitOptions(cfg.chapterUnits)[0] || "章";
   return [
     `${p}1${vu} 风起`,
     `${p}1${cu} 开端`,
@@ -698,9 +712,10 @@ function renderSample(el, sample, isDark) {
 
 // 逐项示例：vol/chapter 跟随用户配置动态生成（用户可能把「卷」换成「幕」），其余用固定示例
 function sampleFor(key) {
-  const p = (activeRulesConfig.prefix || "第")[0];
-  if (key === "vol") return `${p}1${(activeRulesConfig.volumeUnits || "卷")[0]} 风起`;
-  if (key === "chapter") return `${p}1${(activeRulesConfig.chapterUnits || "章")[0]} 开端`;
+  const cfg = activeRulesConfig;
+  const p = parseUnitOptions(cfg.prefix)[0] || "第";
+  if (key === "vol") return `${p}1${parseUnitOptions(cfg.volumeUnits)[0] || "卷"} 风起`;
+  if (key === "chapter") return `${p}1${parseUnitOptions(cfg.chapterUnits)[0] || "章"} 开端`;
   return COLOR_SAMPLES[key] || key;
 }
 
@@ -834,6 +849,11 @@ class HighlightSettingsTab extends obsidian.PluginSettingTab {
     const detail = document.createElement("div");
     detail.style.cssText = "display:none;padding:2px 0 10px 26px;";
     setting.settingEl.after(detail);
+
+    const hint = document.createElement("div");
+    hint.textContent = "单字直接写；词组用 / 分隔，如 我/章节/章/节（长词优先匹配）";
+    hint.style.cssText = "color:var(--text-muted);font-size:11px;margin:2px 0 4px;";
+    detail.appendChild(hint);
 
     const cfg = this.plugin.settings.rules || {};
     this.ruleRow(detail, "起始字", cfg.prefix || DEFAULT_RULES_CONFIG.prefix, "prefix");
