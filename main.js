@@ -771,6 +771,8 @@ var HighlightSettingsTab = class extends obsidian.PluginSettingTab {
       this.previewEls[mode] = el;
     }
     this.refreshPreviews();
+    const credit = containerEl.createEl("p", { text: "\u793A\u4F8B\u6587\u672C\u53D6\u81EA\u4F5C\u8005\u5C0F\u8BF4\u300A\u68A6\u5883\u56DB\u91CD\u594F\u300B\u3002" });
+    credit.style.cssText = "color:var(--text-muted);font-size:11px;margin:4px 0 12px;";
     for (const mode of ["light", "dark"]) {
       containerEl.createEl("h3", { text: mode === "light" ? "\u4EAE\u8272\u4E3B\u9898\u989C\u8272" : "\u6697\u8272\u4E3B\u9898\u989C\u8272" });
       const hint = containerEl.createEl("p", {

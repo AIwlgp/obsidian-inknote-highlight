@@ -881,6 +881,10 @@ class HighlightSettingsTab extends obsidian.PluginSettingTab {
     }
     this.refreshPreviews();
 
+    // 放在预览区最下面：不想显眼，当它不存在也行（合规声明用）
+    const credit = containerEl.createEl("p", { text: "示例文本取自作者小说《梦境四重奏》。" });
+    credit.style.cssText = "color:var(--text-muted);font-size:11px;margin:4px 0 12px;";
+
     for (const mode of ["light", "dark"]) {
       containerEl.createEl("h3", { text: mode === "light" ? "亮色主题颜色" : "暗色主题颜色" });
       const hint = containerEl.createEl("p", {
