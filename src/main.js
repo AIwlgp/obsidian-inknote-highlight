@@ -276,11 +276,26 @@ function collectSpans(text, theme, opts = {}) {
     if (s >= winStart && e <= winEnd) spans.push({ start: s - off, end: e - off, color: theme.meta, bold: true });
   }
 
-  for (const rule of buildRules(theme)) {
+  const rules = buildRules(theme);
+
+  // 小节标题行（numSection）优先于 meta：这些行里「：」不能把标题文字抢成 meta 色，
+  // 否则「1 引言：」会变成「1(小节色) + 引言(meta键色) + ：(meta值色)」的花脸。
+  // 预扫描行区间，供下面的 metaKey/metaValue 过滤使用。
+  const numSectionRule = rules.find((r) => r.name === "numSection");
+  const numSectionRanges = [];
+  if (numSectionRule) {
+    const nre = new RegExp(numSectionRule.re.source, numSectionRule.re.flags.replace("g", "") + "g");
+    for (const m of slice.matchAll(nre)) numSectionRanges.push([m.index, m.index + m[0].length]);
+  }
+  const inNumSection = (idx) => numSectionRanges.some(([s, e]) => idx >= s && idx < e);
+
+  for (const rule of rules) {
     // 给正则补 d 标志，用 indices 拿捕获组区间（准确、不依赖 indexOf）
     const re = rule.re.flags.includes("d") ? rule.re : new RegExp(rule.re.source, rule.re.flags + "d");
     for (const m of slice.matchAll(re)) {
       if (inSkip(off + m.index)) continue;
+      // 小节标题行里：meta 规则让位（其他规则不变）
+      if ((rule.name === "metaKey" || rule.name === "metaValue") && inNumSection(m.index)) continue;
       const st = typeof rule.style === "function" ? rule.style(m, theme) : rule.style;
       if (!st) continue;
       const seg = m.indices[rule.group ?? 0];

@@ -254,10 +254,19 @@ function collectSpans(text, theme, opts = {}) {
     const s = lineStart[i], e = s + lines[i].length;
     if (s >= winStart && e <= winEnd) spans.push({ start: s - off, end: e - off, color: theme.meta, bold: true });
   }
-  for (const rule of buildRules(theme)) {
+  const rules = buildRules(theme);
+  const numSectionRule = rules.find((r) => r.name === "numSection");
+  const numSectionRanges = [];
+  if (numSectionRule) {
+    const nre = new RegExp(numSectionRule.re.source, numSectionRule.re.flags.replace("g", "") + "g");
+    for (const m of slice.matchAll(nre)) numSectionRanges.push([m.index, m.index + m[0].length]);
+  }
+  const inNumSection = (idx) => numSectionRanges.some(([s, e]) => idx >= s && idx < e);
+  for (const rule of rules) {
     const re = rule.re.flags.includes("d") ? rule.re : new RegExp(rule.re.source, rule.re.flags + "d");
     for (const m of slice.matchAll(re)) {
       if (inSkip(off + m.index)) continue;
+      if ((rule.name === "metaKey" || rule.name === "metaValue") && inNumSection(m.index)) continue;
       const st = typeof rule.style === "function" ? rule.style(m, theme) : rule.style;
       if (!st) continue;
       const seg = m.indices[rule.group ?? 0];

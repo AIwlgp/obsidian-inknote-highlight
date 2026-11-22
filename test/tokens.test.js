@@ -395,3 +395,28 @@ test('特殊规则：词组配置下示例与预览取首项', () => {
     T.applyRulesConfig({});
   }
 });
+
+// ---------- 小节标题 vs 冒号 ----------
+
+test('小节标题：1 引言： 整行走小节色，冒号不抢色', () => {
+  const t = styled('1 引言：');
+  assert.ok(!t.some((x) => x.color === L.metaKey || x.color === L.metaValue), '不应出现 meta 色：' + JSON.stringify(t));
+  assert.ok(t.some((x) => x.color === L.section), '应有小节色');
+});
+
+test('小节标题：1 引言 ：（冒号前有空格）同样不抢色', () => {
+  const t = styled('1 引言 ：');
+  assert.ok(!t.some((x) => x.color === L.metaKey || x.color === L.metaValue), '不应出现 meta 色：' + JSON.stringify(t));
+  assert.ok(t.some((x) => x.color === L.section));
+});
+
+test('普通行的 meta 仍生效（不受小节规则影响）', () => {
+  const t = styled('作者：鲁迅');
+  assert.ok(t.some((x) => x.color === L.metaKey || x.color === L.metaValue), '普通行应有 meta 色：' + JSON.stringify(t));
+});
+
+test('小节行里的其他行内规则不受影响（书名号照常）', () => {
+  const t = styled('1 《红楼梦》导读：');
+  assert.ok(t.some((x) => x.text.includes('《红楼梦》') && x.color === L.book), '书名号应保留');
+  assert.ok(!t.some((x) => x.color === L.metaKey || x.color === L.metaValue), '冒号不应抢色');
+});
