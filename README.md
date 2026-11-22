@@ -82,17 +82,26 @@ Settings → **InkNote Highlight** opens a panel with a **live preview** of both
 
 Changes apply immediately to open notes: editor decorations are rebuilt and reading views re-render. Overrides live in the plugin's `data.json` under `colors.light` / `colors.dark` — only the keys you changed are stored, so future updates to the default palette still reach you.
 
-## Custom heading keywords
+## Custom matching rules
 
-Line-level rules follow the template **start char + number + unit char + rest**. Defaults: `第1卷`、`第1章`、`第1回`、`第1节`.
+Line-level rules follow the template **start char + number + unit char + rest**:
 
-In settings, click the **▸** arrow at the far left of the **卷标题** / **章节标题** rows to edit the keywords for that group:
+- Volume / chapter: `第1卷`, `第1章`, `第1回`, `第1节`
+- Section: `1 引言` (number + separator + title)
 
-- **Start chars** — default `第`; add more (e.g. `第序`) so `序1卷` is highlighted too.
-- **Volume units** — default `卷`; add `幕集篇` so `第1幕` gets the volume style.
-- **Chapter units** — default `回章节`; add `幕集` as needed.
+In settings, click the **▸** arrow at the far left of each row to edit its rules in place:
 
-If the same char is added to both unit groups, the volume rule wins. Empty values fall back to the defaults, and special characters in your input are escaped before being used in the pattern.
+| Row | Fields |
+|---|---|
+| 卷标题 (volume) | **Start chars** — default `第`; e.g. `第序` so `序1卷` matches. **Volume units** — default `卷`; add `幕集篇` so `第1幕` uses the volume style. |
+| 章节标题 (chapter) | **Start chars** (shared); **Chapter units** — default `回章节`. |
+| 小节 (section) | **Start char** (optional, e.g. `第`); **Separators** — default `空格`, add `、` `.` `：`; **Title words** — optional, e.g. `引言/引子` restricts what counts as a section title. |
+
+Multiple values are written with `/` (e.g. `我/章节/章/节`; phrases are supported and longer ones match first). Empty values fall back to the defaults, and special characters are escaped before being used in the pattern. Section numbers may be Chinese numerals (`一`, `十二`, …) as well as Arabic digits.
+
+## Meta values
+
+`键：值` pairs are highlighted as meta. The value accepts Chinese, Latin and digits up to the next space (`作者：aiwlgp 鲁迅` → only `aiwlgp` is tinted), and up to two spaces are allowed around the colon (`作者 ： aiwlgp`). Inside a meta value, Latin/digit rules step aside so the value stays one color.
 
 ## Repository layout
 
@@ -108,7 +117,7 @@ If the same char is added to both unit groups, the volume rule wins. Empty value
 
 ## Changelog
 
-- **v2.0.8** — Per-token custom colors for light and dark themes with a live preview, plus configurable heading keywords (start chars and unit chars; e.g. add `幕` and `第1幕` is highlighted). Settings changes apply to open notes immediately.
+- **v2.0.8** — Settings panel with live preview and per-token colors (light/dark); in-place rule editors on the volume / chapter / section rows (start chars, unit chars, section separators and title words); meta values accept Latin/digits up to a space, with up to two spaces around the colon; rule table cached per theme+config; preview sample text comes from the author's novel.
 - **v2.0.7** — English-first README (`README.md`), Chinese translation moved to `README.zh.md` (same functionality as 2.0.6).
 - **v2.0.6** — Manifest metadata compliance: Basic Latin name (`InkNote Highlight`) and an English description ending with a period, as required by the community directory (same functionality as 2.0.5).
 - **v2.0.5** — Fixed: text after a URL (`https://...`) was wrongly tinted as a meta value (meta keys are now Chinese-only). Perf: container scanning (code fences / tables) is cached per document text, so scrolling and theme switches no longer rescan the whole note.

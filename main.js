@@ -218,6 +218,14 @@ function buildRules(t) {
     { name: "url", re: /https?:\/\/[^\s<>\n]{4,200}/g, atomic: true, style: { color: t.link } }
   ];
 }
+var rulesCache = { theme: null, cfg: null, rules: null };
+function getRules(theme) {
+  const cfgKey = JSON.stringify(activeRulesConfig);
+  if (rulesCache.theme === theme && rulesCache.cfg === cfgKey) return rulesCache.rules;
+  const rules = buildRules(theme);
+  rulesCache = { theme, cfg: cfgKey, rules };
+  return rules;
+}
 function detectContainers(text) {
   const skip = [];
   const tableRows = /* @__PURE__ */ new Map();
@@ -289,7 +297,7 @@ function collectSpans(text, theme, opts = {}) {
     const s = lineStart[i], e = s + lines[i].length;
     if (s >= winStart && e <= winEnd) spans.push({ start: s - off, end: e - off, color: theme.meta, bold: true });
   }
-  const rules = buildRules(theme);
+  const rules = getRules(theme);
   const numSectionRule = rules.find((r) => r.name === "numSection");
   const numSectionRanges = [];
   if (numSectionRule) {
@@ -889,12 +897,12 @@ var HighlightSettingsTab = class extends obsidian.PluginSettingTab {
         picker = cp;
         cp.setValue(overrides[key] || defaults[key]).onChange(async (v) => {
           await this.applyChange(mode, key, v);
-          renderSample(sampleEl, sample, isDark);
+          renderSample(sampleEl, sampleFor(key), isDark);
         });
       }).addExtraButton((b) => b.setIcon("rotate-ccw").setTooltip("\u6062\u590D\u9ED8\u8BA4").onClick(async () => {
         await this.applyChange(mode, key, null);
         if (picker) picker.setValue(defaults[key]);
-        renderSample(sampleEl, sample, isDark);
+        renderSample(sampleEl, sampleFor(key), isDark);
       }));
     }
   }

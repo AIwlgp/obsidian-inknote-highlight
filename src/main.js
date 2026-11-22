@@ -240,6 +240,18 @@ function buildRules(t) {
   ];
 }
 
+// ---------- 规则表缓存 ----------
+// 编辑模式每帧重建装饰都会走到 collectSpans；同一主题 + 同一规则配置下
+// 没必要重复编译 30+ 个正则。按「主题对象引用 + 规则配置快照」缓存。
+let rulesCache = { theme: null, cfg: null, rules: null };
+function getRules(theme) {
+  const cfgKey = JSON.stringify(activeRulesConfig);
+  if (rulesCache.theme === theme && rulesCache.cfg === cfgKey) return rulesCache.rules;
+  const rules = buildRules(theme);
+  rulesCache = { theme, cfg: cfgKey, rules };
+  return rules;
+}
+
 // ---------- 容器检测：代码围栏（多行上下文，需单独处理） ----------
 // 返回 { skip: [{start, end}], tableRows: Map<行号, 'header'> }
 // skip 区间（代码围栏内）的行内规则全部跳过；
@@ -328,7 +340,7 @@ function collectSpans(text, theme, opts = {}) {
     if (s >= winStart && e <= winEnd) spans.push({ start: s - off, end: e - off, color: theme.meta, bold: true });
   }
 
-  const rules = buildRules(theme);
+  const rules = getRules(theme);
 
   // 小节标题行（numSection）优先于 meta：这些行里「：」不能把标题文字抢成 meta 色，
   // 否则「1 引言：」会变成「1(小节色) + 引言(meta键色) + ：(meta值色)」的花脸。
@@ -805,8 +817,7 @@ function firstSeparator(input) {
   return isSpaceToken(s) ? " " : s;
 }
 
-function sampleFor(key) {
-  const cfg = activeRulesConfig;
+function sampleFor(key) {  const cfg = activeRulesConfig;
   const p = parseUnitOptions(cfg.prefix)[0] || "第";
   if (key === "vol") return `${p}1${parseUnitOptions(cfg.volumeUnits)[0] || "卷"} 妊沐`;
   if (key === "chapter") return `${p}1${parseUnitOptions(cfg.chapterUnits)[0] || "章"} 贾核`;
@@ -1022,7 +1033,7 @@ class HighlightSettingsTab extends obsidian.PluginSettingTab {
           picker = cp;
           cp.setValue(overrides[key] || defaults[key]).onChange(async (v) => {
             await this.applyChange(mode, key, v);
-            renderSample(sampleEl, sample, isDark);
+            renderSample(sampleEl, sampleFor(key), isDark);
           });
         })
         .addExtraButton((b) => b
@@ -1031,7 +1042,7 @@ class HighlightSettingsTab extends obsidian.PluginSettingTab {
           .onClick(async () => {
             await this.applyChange(mode, key, null);
             if (picker) picker.setValue(defaults[key]);
-            renderSample(sampleEl, sample, isDark);
+            renderSample(sampleEl, sampleFor(key), isDark);
           }));
     }
   }
