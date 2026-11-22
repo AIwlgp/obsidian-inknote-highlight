@@ -161,11 +161,12 @@ function buildRules(t) {
     // 把 URL 之后的正文整段染成 metaValue（v2.0.5 修复）。
     // value = 冒号后到行尾（最长 200 字），不再被中文标点截断
     // 冒号后跟双引号（他说："…"）则失效：引号内容交给 quoteDouble（优先级最高）
-    { name: "metaKey", re: /(?:^|[^\u4e00-\u9fff\w])([\u4e00-\u9fff]{1,16})(?=[：:](?!\s*["\u201C\u201D]))/gm, group: 1, style: { color: t.metaKey } },
-    // meta 值：冒号后到「空格/行尾」为止，中英文数字都算。
+    // meta 键：冒号前允许 0-2 个空格（有人排版写「作者 ：」）
+    { name: "metaKey", re: /(?:^|[^\u4e00-\u9fff\w])([\u4e00-\u9fff]{1,16})[ \t]{0,2}(?=[：:](?!\s*["\u201C\u201D]))/gm, group: 1, style: { color: t.metaKey } },
+    // meta 值：冒号后允许 0-2 个空格（「作者 ： aiwlgp」），值到空格/行尾为止，中英文数字都算。
     // 值里的英文/数字由后面的后处理让位（见 collectSpans 末尾），这里不加 atomic，
     // 否则 key 也会被值色覆盖。
-    { name: "metaValue", re: /(?:^|[^\u4e00-\u9fff\w])([\u4e00-\u9fff]{1,16}[：:](?!\s*["\u201C\u201D])[^\s]{1,200})/gm, group: 1, style: { color: t.metaValue } },
+    { name: "metaValue", re: /(?:^|[^\u4e00-\u9fff\w])([\u4e00-\u9fff]{1,16}[ \t]{0,2}[：:][ \t]{0,2}(?!["\u201C\u201D])[^\s]{1,200})/gm, group: 1, style: { color: t.metaValue } },
     { name: "divider", re: /^\s*[=\-—─═*～~_]{6,}\s*$/gm, style: { color: t.ref } },
     // 标题：组 2 = 标题文字（组 1 是 # 标记，不染色）；颜色按 # 层级递进
     { name: "heading", re: /^(#{1,6})\s+(.+)$/gm, group: 2, style: (m, th) => {

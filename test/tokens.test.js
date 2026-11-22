@@ -448,6 +448,22 @@ test('meta 值：数字值也不被数字规则抢色', () => {
   assert.ok(!t.some((x) => x.color === L.numeric), '数字不应被 numeric 抢色');
 });
 
+test('meta：冒号前后可带空格（作者 ： aiwlgp）', () => {
+  const t = styled('作者 ： aiwlgp');
+  assert.ok(t.some((x) => x.color === L.metaValue), '带空格也应染 metaValue：' + JSON.stringify(t));
+  assert.ok(!t.some((x) => x.color === L.en), 'aiwlgp 不应被英文规则抢色');
+});
+
+test('meta：冒号前 2 个空格也认', () => {
+  const t = styled('作者  ：  鲁迅');
+  assert.ok(t.some((x) => x.color === L.metaValue), '2 个空格也应匹配：' + JSON.stringify(t));
+});
+
+test('meta：冒号后空格 + 英文值', () => {
+  const t = styled('版本： 2026');
+  assert.ok(t.some((x) => x.color === L.metaValue), '冒号后空格应匹配：' + JSON.stringify(t));
+});
+
 // ---------- 小节分隔符 ----------
 
 function sectionColor(line) {
