@@ -596,6 +596,59 @@ const PREVIEW_TEXT = [
   "| 正文 | 正文 |",
 ].join("\n");
 
+// 每个颜色项的示例文本：直接显示该项当前颜色/样式的效果
+const COLOR_SAMPLES = {
+  vol: "第1卷 风起",
+  chapter: "第1章 开端",
+  section: "1 引言",
+  h1: "一级标题",
+  h2: "二级标题",
+  h3: "三级标题",
+  h4: "四级标题",
+  ordinalCircle: "①②③",
+  ordinalParenNum: "（1961）",
+  ordinalParenCn: "（中文括号）",
+  arrow: "→ ⇒",
+  dash: "————",
+  italic: "*斜体标注行",
+  meta: "表头",
+  metaKey: "作者",
+  metaValue: "：鲁迅",
+  ref: "[1] [12]",
+  blockquote: "> 引用行",
+  book: "《红楼梦》",
+  quote: "「引号」",
+  quoteDouble: "“双引号”",
+  quoteBook: "『书名引号』",
+  numeric: "2024-01-01 1234 7.83Hz",
+  bold: "粗体",
+  link: "[链接](url) https://a.b",
+  strike: "删除线",
+  list: "- 列表项",
+  en: "English ABC",
+  bracket: "【方括号】",
+};
+
+// 用 buildTokens 渲染一段示例，保证预览与真实渲染完全一致（含粗体/字号等属性）
+function renderSample(el, sample, isDark) {
+  if (!el) return;
+  el.empty();
+  for (const tk of buildTokens(sample, isDark)) {
+    if (!tk.color && !tk.bold && !tk.strike && !tk.mono && !tk.sizeDelta) {
+      el.appendChild(document.createTextNode(tk.text));
+      continue;
+    }
+    const span = document.createElement("span");
+    span.textContent = tk.text;
+    if (tk.color) span.style.setProperty("color", tk.color, "important");
+    if (tk.bold) span.style.setProperty("font-weight", "bold", "important");
+    if (tk.sizeDelta) span.style.setProperty("font-size", `calc(1em + ${tk.sizeDelta}px)`, "important");
+    if (tk.strike) span.style.setProperty("text-decoration", "line-through", "important");
+    if (tk.mono) span.style.setProperty("font-family", "var(--font-monospace)", "important");
+    el.appendChild(span);
+  }
+}
+
 function renderPreview(container, isDark) {
   if (!container) return;
   container.empty();
@@ -694,14 +747,23 @@ class HighlightSettingsTab extends obsidian.PluginSettingTab {
   renderColorGroup(parent, mode) {
     const defaults = THEMES[mode];
     const overrides = this.plugin.settings.colors[mode] || {};
+    const isDark = mode === "dark";
     for (const key of Object.keys(defaults)) {
       let picker = null;
-      new obsidian.Setting(parent)
-        .setName(COLOR_LABELS[key] || key)
+      const setting = new obsidian.Setting(parent).setName(COLOR_LABELS[key] || key);
+
+      // 名称后面的逐项实时示例：直接显示该 token 当前颜色/样式的效果
+      const sampleEl = setting.nameEl.createSpan({ cls: "inknote-color-sample" });
+      sampleEl.style.cssText = "margin-left:12px;opacity:0.9;font-weight:normal;";
+      const sample = COLOR_SAMPLES[key] || key;
+      renderSample(sampleEl, sample, isDark);
+
+      setting
         .addColorPicker((cp) => {
           picker = cp;
           cp.setValue(overrides[key] || defaults[key]).onChange(async (v) => {
             await this.applyChange(mode, key, v);
+            renderSample(sampleEl, sample, isDark);
           });
         })
         .addExtraButton((b) => b
@@ -710,6 +772,7 @@ class HighlightSettingsTab extends obsidian.PluginSettingTab {
           .onClick(async () => {
             await this.applyChange(mode, key, null);
             if (picker) picker.setValue(defaults[key]);
+            renderSample(sampleEl, sample, isDark);
           }));
     }
   }
