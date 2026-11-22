@@ -85,29 +85,38 @@ var DEFAULT_RULES_CONFIG = {
   // 卷类标识字
   chapterUnits: "\u56DE\u7AE0\u8282",
   // 章节类标识字
-  sectionSeparators: "\u7A7A\u683C"
+  sectionSeparators: "\u7A7A\u683C",
   // 数字小节：数字与标题之间的分隔符（空格 / 、 / . / ：…）
+  sectionPrefix: "",
+  // 数字小节：数字前的起始字（默认空，如填「第」则「第1 引言」也认）
+  sectionUnits: ""
+  // 数字小节：标题词限定（留空=任意标题；填「引言/引子」则标题须以其开头）
 };
 var activeRulesConfig = { ...DEFAULT_RULES_CONFIG };
 function escapeRegExp(s) {
   return String(s || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-function parseUnitOptions(input) {
+function parseUnitOptions(input, opts) {
   const s = String(input || "").trim();
   if (!s) return [];
   if (/[\/／]/.test(s)) {
     return s.split(/[\/／]/).map((x) => x.trim()).filter(Boolean);
   }
+  if (opts && opts.whole) return [s];
   return Array.from(s);
 }
 function applyRulesConfig(cfg) {
   const c = Object.assign({}, DEFAULT_RULES_CONFIG, cfg || {});
   const fix = (v, def) => parseUnitOptions(v).length ? String(v).trim() : def;
+  const keep = (v, def) => v === void 0 || v === null ? def : String(v).trim();
   activeRulesConfig = {
     prefix: fix(c.prefix, DEFAULT_RULES_CONFIG.prefix),
     volumeUnits: fix(c.volumeUnits, DEFAULT_RULES_CONFIG.volumeUnits),
     chapterUnits: fix(c.chapterUnits, DEFAULT_RULES_CONFIG.chapterUnits),
-    sectionSeparators: fix(c.sectionSeparators, DEFAULT_RULES_CONFIG.sectionSeparators)
+    sectionSeparators: fix(c.sectionSeparators, DEFAULT_RULES_CONFIG.sectionSeparators),
+    // 起始字 / 标题词允许为空（空 = 不限）
+    sectionPrefix: keep(c.sectionPrefix, ""),
+    sectionUnits: keep(c.sectionUnits, "")
   };
   return activeRulesConfig;
 }
@@ -122,16 +131,21 @@ function makeHeadingLineRe(prefix, units) {
 function isSpaceToken(s) {
   return s === "\u7A7A\u683C" || s === "space" || s === "Space" || s === " ";
 }
-function makeSectionRe(separators) {
+var SECTION_NUM = "[\u96F6\u4E00\u4E8C\u4E09\u56DB\u4E94\u516D\u4E03\u516B\u4E5D\u5341\u767E\u53430-9]{1,4}";
+function makeSectionRe(prefix, separators, units) {
+  const prefixOpts = parseUnitOptions(prefix).sort((a, b) => b.length - a.length);
+  const p = prefixOpts.length ? `(?:${prefixOpts.map(escapeRegExp).join("|")})?` : "";
   const raw = String(separators || "").trim();
-  let opts;
+  let seps;
   if (isSpaceToken(raw)) {
-    opts = ["[ \\t]+"];
+    seps = "[ \\t]+";
   } else {
-    opts = parseUnitOptions(raw).map((s) => isSpaceToken(s) ? "[ \\t]+" : escapeRegExp(s));
+    const opts = parseUnitOptions(raw).map((s) => isSpaceToken(s) ? "[ \\t]+" : escapeRegExp(s));
+    seps = opts.length ? `(?:${opts.join("|")})` : "[ \\t]+";
   }
-  if (!opts.length) opts = ["[ \\t]+"];
-  return new RegExp(`^\\s*\\d{1,3}(?:${opts.join("|")})[^\\n]+$`, "gm");
+  const unitOpts = parseUnitOptions(units, { whole: true }).sort((a, b) => b.length - a.length);
+  const u = unitOpts.length ? `(?:${unitOpts.map(escapeRegExp).join("|")})` : "";
+  return new RegExp(`^\\s*${p}${SECTION_NUM}${seps}${u}[^\\n]*$`, "gm");
 }
 function buildRules(t) {
   return [
@@ -140,7 +154,7 @@ function buildRules(t) {
     { name: "vol", re: makeHeadingLineRe(activeRulesConfig.prefix, activeRulesConfig.volumeUnits), style: { color: t.vol, bold: true, sizeDelta: 4 } },
     { name: "chapter", re: makeHeadingLineRe(activeRulesConfig.prefix, activeRulesConfig.chapterUnits), style: { color: t.chapter, bold: true, sizeDelta: 2 } },
     // 小节标题：数字+空格（1 引言）。数字+点/顿号（1. 1、）走 orderedMark，避免混色
-    { name: "numSection", re: makeSectionRe(activeRulesConfig.sectionSeparators), style: { color: t.section, bold: true } },
+    { name: "numSection", re: makeSectionRe(activeRulesConfig.sectionPrefix, activeRulesConfig.sectionSeparators, activeRulesConfig.sectionUnits), style: { color: t.section, bold: true } },
     { name: "bareSection", re: /^\s*(?:简介|序|序言|前言|目录|后记|附录|凡例|校注凡例|说明|摘要|导读)\s*$/gm, style: { color: t.section, bold: true } },
     // meta（行内）：任意位置出现「中文键：值」就染，不挑词（适配小说自创词）
     // key 限定为纯中文（1-16 字）：避免 `https://...` 里的 `https:` 被当成 meta 键，
@@ -584,10 +598,12 @@ function buildPreviewText() {
   const vu = parseUnitOptions(cfg.volumeUnits)[0] || "\u5377";
   const cu = parseUnitOptions(cfg.chapterUnits)[0] || "\u7AE0";
   const sep = firstSeparator(cfg.sectionSeparators);
+  const sPrefix = parseUnitOptions(cfg.sectionPrefix)[0] || "";
+  const sUnit = parseUnitOptions(cfg.sectionUnits, { whole: true })[0] || "\u5F15\u8A00";
   return [
     `${p}1${vu} \u98CE\u8D77`,
     `${p}1${cu} \u5F00\u7AEF`,
-    `1${sep}\u5F15\u8A00`,
+    `${sPrefix}1${sep}${sUnit}`,
     "\u7B80\u4ECB",
     "\u4F5C\u8005\uFF1A\u9C81\u8FC5",
     "---",
@@ -673,7 +689,12 @@ function sampleFor(key) {
   const p = parseUnitOptions(cfg.prefix)[0] || "\u7B2C";
   if (key === "vol") return `${p}1${parseUnitOptions(cfg.volumeUnits)[0] || "\u5377"} \u98CE\u8D77`;
   if (key === "chapter") return `${p}1${parseUnitOptions(cfg.chapterUnits)[0] || "\u7AE0"} \u5F00\u7AEF`;
-  if (key === "section") return `1${firstSeparator(cfg.sectionSeparators)}\u5F15\u8A00`;
+  if (key === "section") {
+    const sp = parseUnitOptions(cfg.sectionPrefix)[0] || "";
+    const sep = firstSeparator(cfg.sectionSeparators);
+    const su = parseUnitOptions(cfg.sectionUnits, { whole: true })[0] || "\u5F15\u8A00";
+    return `${sp}1${sep}${su}`;
+  }
   return COLOR_SAMPLES[key] || key;
 }
 function renderPreview(container, isDark) {
@@ -716,13 +737,13 @@ var HighlightSettingsTab = class extends obsidian.PluginSettingTab {
     this.plugin = plugin;
     this.previewEls = { light: null, dark: null };
     this.sampleEls = {};
-    this.ruleInputRefs = { prefix: [], volumeUnits: [], chapterUnits: [] };
+    this.ruleInputRefs = { prefix: [], volumeUnits: [], chapterUnits: [], sectionPrefix: [], sectionSeparators: [], sectionUnits: [] };
   }
   display() {
     const { containerEl } = this;
     containerEl.empty();
     this.sampleEls = {};
-    this.ruleInputRefs = { prefix: [], volumeUnits: [], chapterUnits: [] };
+    this.ruleInputRefs = { prefix: [], volumeUnits: [], chapterUnits: [], sectionPrefix: [], sectionSeparators: [], sectionUnits: [] };
     containerEl.createEl("h3", { text: "\u5B9E\u65F6\u9884\u89C8" });
     const wrap = containerEl.createDiv();
     wrap.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px;";
@@ -793,7 +814,7 @@ var HighlightSettingsTab = class extends obsidian.PluginSettingTab {
     detail.style.cssText = "display:none;padding:2px 0 10px 26px;";
     setting.settingEl.after(detail);
     const hint = document.createElement("div");
-    hint.textContent = key === "section" ? "\u6570\u5B57\u4E0E\u6807\u9898\u4E4B\u95F4\u7684\u5206\u9694\u7B26\uFF0C\u7528 / \u5206\u9694\u591A\u9879\uFF1B\u7A7A\u767D\u5199\u300C\u7A7A\u683C\u300D\uFF0C\u5982 \u7A7A\u683C/\u3001/. " : "\u5355\u5B57\u76F4\u63A5\u5199\uFF1B\u8BCD\u7EC4\u7528 / \u5206\u9694\uFF0C\u5982 \u6211/\u7AE0\u8282/\u7AE0/\u8282\uFF08\u957F\u8BCD\u4F18\u5148\u5339\u914D\uFF09";
+    hint.textContent = key === "section" ? "\u4E09\u90E8\u5206\u90FD\u53EF\u7559\u7A7A/\u81EA\u5B9A\u4E49\uFF1A\u8D77\u59CB\u5B57\uFF08\u5982\u300C\u7B2C\u300D\uFF09\u3001\u5206\u9694\u7B26\uFF08\u7A7A\u683C/\u3001/./\uFF1A\uFF09\u3001\u6807\u9898\u8BCD\uFF08\u7559\u7A7A=\u4EFB\u610F\uFF1B\u586B\u300C\u5F15\u8A00/\u5F15\u5B50\u300D\u5219\u6807\u9898\u987B\u4EE5\u5176\u5F00\u5934\uFF09\u3002" : "\u5355\u5B57\u76F4\u63A5\u5199\uFF1B\u8BCD\u7EC4\u7528 / \u5206\u9694\uFF0C\u5982 \u6211/\u7AE0\u8282/\u7AE0/\u8282\uFF08\u957F\u8BCD\u4F18\u5148\u5339\u914D\uFF09";
     hint.style.cssText = "color:var(--text-muted);font-size:11px;margin:2px 0 4px;";
     detail.appendChild(hint);
     const cfg = this.plugin.settings.rules || {};
@@ -804,7 +825,9 @@ var HighlightSettingsTab = class extends obsidian.PluginSettingTab {
       this.ruleRow(detail, "\u8D77\u59CB\u5B57", cfg.prefix || DEFAULT_RULES_CONFIG.prefix, "prefix");
       this.ruleRow(detail, "\u7AE0\u8282\u7C7B\u6807\u8BC6\u5B57", cfg.chapterUnits || DEFAULT_RULES_CONFIG.chapterUnits, "chapterUnits");
     } else {
+      this.ruleRow(detail, "\u8D77\u59CB\u5B57", cfg.sectionPrefix || "", "sectionPrefix");
       this.ruleRow(detail, "\u5206\u9694\u7B26", cfg.sectionSeparators || DEFAULT_RULES_CONFIG.sectionSeparators, "sectionSeparators");
+      this.ruleRow(detail, "\u5F15\u8A00\u7C7B\u6807\u8BC6\u5B57", cfg.sectionUnits || "", "sectionUnits");
     }
     let open = false;
     caret.addEventListener("click", () => {

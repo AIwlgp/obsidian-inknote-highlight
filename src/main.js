@@ -68,6 +68,8 @@ const DEFAULT_RULES_CONFIG = {
   volumeUnits: "卷",      // 卷类标识字
   chapterUnits: "回章节",  // 章节类标识字
   sectionSeparators: "空格", // 数字小节：数字与标题之间的分隔符（空格 / 、 / . / ：…）
+  sectionPrefix: "",      // 数字小节：数字前的起始字（默认空，如填「第」则「第1 引言」也认）
+  sectionUnits: "",       // 数字小节：标题词限定（留空=任意标题；填「引言/引子」则标题须以其开头）
 };
 let activeRulesConfig = { ...DEFAULT_RULES_CONFIG };
 
@@ -77,27 +79,33 @@ function escapeRegExp(s) {
 }
 
 /**
- * 解析「起始字 / 标识字」输入：
+ * 解析「起始字 / 标识字 / 标题词」输入：
  *   - 含 /（或 ／）→ 按词组拆：`我/章节/章/节` → ["我","章节","章","节"]
- *   - 不含 / → 逐字拆（兼容旧写法）：`我章回节` → ["我","章","回","节"]
+ *   - 不含 / → 默认逐字拆（兼容「回章节」「卷幕」这类写法）
+ *   - opts.whole = true → 不含 / 时整体作为一个选项（标题词如「引子」不该拆）
  */
-function parseUnitOptions(input) {
+function parseUnitOptions(input, opts) {
   const s = String(input || "").trim();
   if (!s) return [];
   if (/[\/／]/.test(s)) {
     return s.split(/[\/／]/).map((x) => x.trim()).filter(Boolean);
   }
+  if (opts && opts.whole) return [s];
   return Array.from(s);
 }
 
 function applyRulesConfig(cfg) {
   const c = Object.assign({}, DEFAULT_RULES_CONFIG, cfg || {});
   const fix = (v, def) => (parseUnitOptions(v).length ? String(v).trim() : def);
+  const keep = (v, def) => (v === undefined || v === null ? def : String(v).trim());
   activeRulesConfig = {
     prefix: fix(c.prefix, DEFAULT_RULES_CONFIG.prefix),
     volumeUnits: fix(c.volumeUnits, DEFAULT_RULES_CONFIG.volumeUnits),
     chapterUnits: fix(c.chapterUnits, DEFAULT_RULES_CONFIG.chapterUnits),
     sectionSeparators: fix(c.sectionSeparators, DEFAULT_RULES_CONFIG.sectionSeparators),
+    // 起始字 / 标题词允许为空（空 = 不限）
+    sectionPrefix: keep(c.sectionPrefix, ""),
+    sectionUnits: keep(c.sectionUnits, ""),
   };
   return activeRulesConfig;
 }
@@ -121,16 +129,33 @@ function isSpaceToken(s) {
  * 生成数字小节正则：数字 + 分隔符 + 标题。
  * 默认分隔符为空格（保持旧行为）；用户可用 / 添加「、」「.」「：」「）」「空格」等。
  */
-function makeSectionRe(separators) {
+/** 小节的数字部分：阿拉伯数字 + 中文数字 */
+const SECTION_NUM = "[零一二三四五六七八九十百千0-9]{1,4}";
+
+/**
+ * 生成数字小节正则：<起始字?><数字><分隔符><标题词?>
+ *   - 起始字为空：数字直接从行首（允许前置空白）开始
+ *   - 起始字如「第」：则「第1 引言」也认
+ *   - 标题词为空：任意标题；填「引言/引子」则标题须以其开头
+ */
+function makeSectionRe(prefix, separators, units) {
+  const prefixOpts = parseUnitOptions(prefix).sort((a, b) => b.length - a.length);
+  // 起始字可选：填「第」后「第1 引言」与「1 引言」都认
+  const p = prefixOpts.length ? `(?:${prefixOpts.map(escapeRegExp).join("|")})?` : "";
+
   const raw = String(separators || "").trim();
-  let opts;
+  let seps;
   if (isSpaceToken(raw)) {
-    opts = ["[ \\t]+"];
+    seps = "[ \\t]+";
   } else {
-    opts = parseUnitOptions(raw).map((s) => (isSpaceToken(s) ? "[ \\t]+" : escapeRegExp(s)));
+    const opts = parseUnitOptions(raw).map((s) => (isSpaceToken(s) ? "[ \\t]+" : escapeRegExp(s)));
+    seps = opts.length ? `(?:${opts.join("|")})` : "[ \\t]+";
   }
-  if (!opts.length) opts = ["[ \\t]+"];
-  return new RegExp(`^\\s*\\d{1,3}(?:${opts.join("|")})[^\\n]+$`, "gm");
+
+  const unitOpts = parseUnitOptions(units, { whole: true }).sort((a, b) => b.length - a.length);
+  const u = unitOpts.length ? `(?:${unitOpts.map(escapeRegExp).join("|")})` : "";
+
+  return new RegExp(`^\\s*${p}${SECTION_NUM}${seps}${u}[^\\n]*$`, "gm");
 }
 
 // ---------- 规则表 ----------
@@ -149,7 +174,7 @@ function buildRules(t) {
     { name: "vol",        re: makeHeadingLineRe(activeRulesConfig.prefix, activeRulesConfig.volumeUnits), style: { color: t.vol, bold: true, sizeDelta: 4 } },
     { name: "chapter",    re: makeHeadingLineRe(activeRulesConfig.prefix, activeRulesConfig.chapterUnits), style: { color: t.chapter, bold: true, sizeDelta: 2 } },
     // 小节标题：数字+空格（1 引言）。数字+点/顿号（1. 1、）走 orderedMark，避免混色
-    { name: "numSection", re: makeSectionRe(activeRulesConfig.sectionSeparators), style: { color: t.section, bold: true } },
+    { name: "numSection", re: makeSectionRe(activeRulesConfig.sectionPrefix, activeRulesConfig.sectionSeparators, activeRulesConfig.sectionUnits), style: { color: t.section, bold: true } },
     { name: "bareSection", re: /^\s*(?:简介|序|序言|前言|目录|后记|附录|凡例|校注凡例|说明|摘要|导读)\s*$/gm, style: { color: t.section, bold: true } },
     // meta（行内）：任意位置出现「中文键：值」就染，不挑词（适配小说自创词）
     // key 限定为纯中文（1-16 字）：避免 `https://...` 里的 `https:` 被当成 meta 键，
@@ -667,10 +692,12 @@ function buildPreviewText() {
   const vu = parseUnitOptions(cfg.volumeUnits)[0] || "卷";
   const cu = parseUnitOptions(cfg.chapterUnits)[0] || "章";
   const sep = firstSeparator(cfg.sectionSeparators);
+  const sPrefix = parseUnitOptions(cfg.sectionPrefix)[0] || "";
+  const sUnit = parseUnitOptions(cfg.sectionUnits, { whole: true })[0] || "引言";
   return [
     `${p}1${vu} 风起`,
     `${p}1${cu} 开端`,
-    `1${sep}引言`,
+    `${sPrefix}1${sep}${sUnit}`,
     "简介",
     "作者：鲁迅",
     "---",
@@ -764,7 +791,12 @@ function sampleFor(key) {
   const p = parseUnitOptions(cfg.prefix)[0] || "第";
   if (key === "vol") return `${p}1${parseUnitOptions(cfg.volumeUnits)[0] || "卷"} 风起`;
   if (key === "chapter") return `${p}1${parseUnitOptions(cfg.chapterUnits)[0] || "章"} 开端`;
-  if (key === "section") return `1${firstSeparator(cfg.sectionSeparators)}引言`;
+  if (key === "section") {
+    const sp = parseUnitOptions(cfg.sectionPrefix)[0] || "";
+    const sep = firstSeparator(cfg.sectionSeparators);
+    const su = parseUnitOptions(cfg.sectionUnits, { whole: true })[0] || "引言";
+    return `${sp}1${sep}${su}`;
+  }
   return COLOR_SAMPLES[key] || key;
 }
 
@@ -809,14 +841,14 @@ class HighlightSettingsTab extends obsidian.PluginSettingTab {
     this.plugin = plugin;
     this.previewEls = { light: null, dark: null };
     this.sampleEls = {};
-    this.ruleInputRefs = { prefix: [], volumeUnits: [], chapterUnits: [] };
+    this.ruleInputRefs = { prefix: [], volumeUnits: [], chapterUnits: [], sectionPrefix: [], sectionSeparators: [], sectionUnits: [] };
   }
 
   display() {
     const { containerEl } = this;
     containerEl.empty();
     this.sampleEls = {};
-    this.ruleInputRefs = { prefix: [], volumeUnits: [], chapterUnits: [] };
+    this.ruleInputRefs = { prefix: [], volumeUnits: [], chapterUnits: [], sectionPrefix: [], sectionSeparators: [], sectionUnits: [] };
 
     containerEl.createEl("h3", { text: "实时预览" });
     const wrap = containerEl.createDiv();
@@ -901,7 +933,7 @@ class HighlightSettingsTab extends obsidian.PluginSettingTab {
 
     const hint = document.createElement("div");
     hint.textContent = key === "section"
-      ? "数字与标题之间的分隔符，用 / 分隔多项；空白写「空格」，如 空格/、/. "
+      ? "三部分都可留空/自定义：起始字（如「第」）、分隔符（空格/、/./：）、标题词（留空=任意；填「引言/引子」则标题须以其开头）。"
       : "单字直接写；词组用 / 分隔，如 我/章节/章/节（长词优先匹配）";
     hint.style.cssText = "color:var(--text-muted);font-size:11px;margin:2px 0 4px;";
     detail.appendChild(hint);
@@ -914,7 +946,9 @@ class HighlightSettingsTab extends obsidian.PluginSettingTab {
       this.ruleRow(detail, "起始字", cfg.prefix || DEFAULT_RULES_CONFIG.prefix, "prefix");
       this.ruleRow(detail, "章节类标识字", cfg.chapterUnits || DEFAULT_RULES_CONFIG.chapterUnits, "chapterUnits");
     } else {
+      this.ruleRow(detail, "起始字", cfg.sectionPrefix || "", "sectionPrefix");
       this.ruleRow(detail, "分隔符", cfg.sectionSeparators || DEFAULT_RULES_CONFIG.sectionSeparators, "sectionSeparators");
+      this.ruleRow(detail, "引言类标识字", cfg.sectionUnits || "", "sectionUnits");
     }
 
     let open = false;

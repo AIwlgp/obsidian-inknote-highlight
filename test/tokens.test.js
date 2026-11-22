@@ -475,3 +475,68 @@ test('小节分隔符：只有斜杠时回退默认', () => {
     T.applyRulesConfig({});
   }
 });
+
+// ---------- 小节：中文数字 / 标题词 / 起始字 ----------
+
+test('小节：中文数字（一 引言、十 说明）可匹配', () => {
+  try {
+    T.applyRulesConfig({});
+    assert.ok(sectionColor('一 引言'), '一 引言 应匹配');
+    assert.ok(sectionColor('十 说明'), '十 说明 应匹配');
+    assert.ok(sectionColor('十二 结语'), '十二 结语 应匹配');
+  } finally {
+    T.applyRulesConfig({});
+  }
+});
+
+test('小节：标题词限定（引言/引子）后，其他标题不再匹配', () => {
+  try {
+    T.applyRulesConfig({ sectionUnits: '引言/引子' });
+    assert.ok(sectionColor('1 引言'));
+    assert.ok(sectionColor('1 引子'));
+    assert.ok(!sectionColor('1 随便写'), '标题词不在列表时不应匹配');
+  } finally {
+    T.applyRulesConfig({});
+  }
+});
+
+test('小节：标题词留空时任意标题都匹配（默认行为不变）', () => {
+  try {
+    T.applyRulesConfig({});
+    assert.ok(sectionColor('1 任意标题'));
+    assert.ok(sectionColor('2 方法'));
+  } finally {
+    T.applyRulesConfig({});
+  }
+});
+
+test('小节：起始字「第」后，第1 引言 与 1 引言 都匹配', () => {
+  try {
+    T.applyRulesConfig({ sectionPrefix: '第' });
+    assert.ok(sectionColor('第1 引言'));
+    assert.ok(sectionColor('1 引言'), '起始字为可选，无前缀写法仍应匹配');
+  } finally {
+    T.applyRulesConfig({});
+  }
+});
+
+test('小节：三种写法（一 引言 / 1 引子 / 1.引言）都能匹配', () => {
+  try {
+    T.applyRulesConfig({ sectionSeparators: '空格/、/.' , sectionUnits: '引言/引子' });
+    assert.ok(sectionColor('一 引言'));
+    assert.ok(sectionColor('1 引子'));
+    assert.ok(sectionColor('1.引言'));
+  } finally {
+    T.applyRulesConfig({});
+  }
+});
+
+test('小节：示例跟随起始字与标题词', () => {
+  try {
+    T.applyRulesConfig({ sectionPrefix: '第', sectionUnits: '引子' });
+    const s = T.sampleFor('section');
+    assert.ok(s.includes('第') && s.includes('引子'), '示例应含起始字与标题词: ' + s);
+  } finally {
+    T.applyRulesConfig({});
+  }
+});
