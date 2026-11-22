@@ -695,7 +695,7 @@ function buildPreviewText() {
   const sPrefix = parseUnitOptions(cfg.sectionPrefix)[0] || "";
   const sUnit = parseUnitOptions(cfg.sectionUnits, { whole: true })[0] || "引言";
   return [
-    "《梦境四重奏》「引号」『书名引号』“双引号”",
+    "《梦境四重奏》",
     `${p}1${vu} 妊沐`,
     `${p}1${cu} 贾核`,
     `${sPrefix}1${sep}${sUnit}`,
@@ -711,6 +711,7 @@ function buildPreviewText() {
     "- 列表项",
     "- [x] 任务项",
     "一、中文序号",
+    "「引号」『书名引号』“双引号”",
     "[1] ① （1961） （中文括号）",
     "2024-01-01 12:30 1970s 7.83Hz",
     "→ ——",
