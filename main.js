@@ -83,8 +83,10 @@ var DEFAULT_RULES_CONFIG = {
   // 起始字（字符类，可多个）
   volumeUnits: "\u5377",
   // 卷类标识字
-  chapterUnits: "\u56DE\u7AE0\u8282"
+  chapterUnits: "\u56DE\u7AE0\u8282",
   // 章节类标识字
+  sectionSeparators: "\u7A7A\u683C"
+  // 数字小节：数字与标题之间的分隔符（空格 / 、 / . / ：…）
 };
 var activeRulesConfig = { ...DEFAULT_RULES_CONFIG };
 function escapeRegExp(s) {
@@ -104,7 +106,8 @@ function applyRulesConfig(cfg) {
   activeRulesConfig = {
     prefix: fix(c.prefix, DEFAULT_RULES_CONFIG.prefix),
     volumeUnits: fix(c.volumeUnits, DEFAULT_RULES_CONFIG.volumeUnits),
-    chapterUnits: fix(c.chapterUnits, DEFAULT_RULES_CONFIG.chapterUnits)
+    chapterUnits: fix(c.chapterUnits, DEFAULT_RULES_CONFIG.chapterUnits),
+    sectionSeparators: fix(c.sectionSeparators, DEFAULT_RULES_CONFIG.sectionSeparators)
   };
   return activeRulesConfig;
 }
@@ -116,6 +119,20 @@ function makeHeadingLineRe(prefix, units) {
   const u = `(?:${uOpts.map(escapeRegExp).join("|")})`;
   return new RegExp(`^${p}[\u96F6\u4E00\u4E8C\u4E09\u56DB\u4E94\u516D\u4E03\u516B\u4E5D\u5341\u767E\u53430-9]+${u}.*$`, "gm");
 }
+function isSpaceToken(s) {
+  return s === "\u7A7A\u683C" || s === "space" || s === "Space" || s === " ";
+}
+function makeSectionRe(separators) {
+  const raw = String(separators || "").trim();
+  let opts;
+  if (isSpaceToken(raw)) {
+    opts = ["[ \\t]+"];
+  } else {
+    opts = parseUnitOptions(raw).map((s) => isSpaceToken(s) ? "[ \\t]+" : escapeRegExp(s));
+  }
+  if (!opts.length) opts = ["[ \\t]+"];
+  return new RegExp(`^\\s*\\d{1,3}(?:${opts.join("|")})[^\\n]+$`, "gm");
+}
 function buildRules(t) {
   return [
     // ===== 行级规则（整行语义） =====
@@ -123,7 +140,7 @@ function buildRules(t) {
     { name: "vol", re: makeHeadingLineRe(activeRulesConfig.prefix, activeRulesConfig.volumeUnits), style: { color: t.vol, bold: true, sizeDelta: 4 } },
     { name: "chapter", re: makeHeadingLineRe(activeRulesConfig.prefix, activeRulesConfig.chapterUnits), style: { color: t.chapter, bold: true, sizeDelta: 2 } },
     // 小节标题：数字+空格（1 引言）。数字+点/顿号（1. 1、）走 orderedMark，避免混色
-    { name: "numSection", re: /^\s*\d{1,3}[ \t]+[^\n]+$/gm, style: { color: t.section, bold: true } },
+    { name: "numSection", re: makeSectionRe(activeRulesConfig.sectionSeparators), style: { color: t.section, bold: true } },
     { name: "bareSection", re: /^\s*(?:简介|序|序言|前言|目录|后记|附录|凡例|校注凡例|说明|摘要|导读)\s*$/gm, style: { color: t.section, bold: true } },
     // meta（行内）：任意位置出现「中文键：值」就染，不挑词（适配小说自创词）
     // key 限定为纯中文（1-16 字）：避免 `https://...` 里的 `https:` 被当成 meta 键，
@@ -566,10 +583,11 @@ function buildPreviewText() {
   const p = parseUnitOptions(cfg.prefix)[0] || "\u7B2C";
   const vu = parseUnitOptions(cfg.volumeUnits)[0] || "\u5377";
   const cu = parseUnitOptions(cfg.chapterUnits)[0] || "\u7AE0";
+  const sep = firstSeparator(cfg.sectionSeparators);
   return [
     `${p}1${vu} \u98CE\u8D77`,
     `${p}1${cu} \u5F00\u7AEF`,
-    "1 \u5F15\u8A00",
+    `1${sep}\u5F15\u8A00`,
     "\u7B80\u4ECB",
     "\u4F5C\u8005\uFF1A\u9C81\u8FC5",
     "---",
@@ -643,11 +661,19 @@ function renderSample(el, sample, isDark) {
     el.appendChild(span);
   }
 }
+function firstSeparator(input) {
+  const raw = String(input || "").trim();
+  if (isSpaceToken(raw)) return " ";
+  const opts = parseUnitOptions(raw);
+  const s = opts[0] || "\u7A7A\u683C";
+  return isSpaceToken(s) ? " " : s;
+}
 function sampleFor(key) {
   const cfg = activeRulesConfig;
   const p = parseUnitOptions(cfg.prefix)[0] || "\u7B2C";
   if (key === "vol") return `${p}1${parseUnitOptions(cfg.volumeUnits)[0] || "\u5377"} \u98CE\u8D77`;
   if (key === "chapter") return `${p}1${parseUnitOptions(cfg.chapterUnits)[0] || "\u7AE0"} \u5F00\u7AEF`;
+  if (key === "section") return `1${firstSeparator(cfg.sectionSeparators)}\u5F15\u8A00`;
   return COLOR_SAMPLES[key] || key;
 }
 function renderPreview(container, isDark) {
@@ -760,22 +786,25 @@ var HighlightSettingsTab = class extends obsidian.PluginSettingTab {
   attachRuleEditor(setting, key) {
     const caret = document.createElement("span");
     caret.textContent = "\u25B8";
-    caret.title = key === "vol" ? "\u7F16\u8F91\u5377\u7C7B\u89C4\u5219\u7684\u5339\u914D\u5B57" : "\u7F16\u8F91\u7AE0\u8282\u7C7B\u89C4\u5219\u7684\u5339\u914D\u5B57";
+    caret.title = key === "vol" ? "\u7F16\u8F91\u5377\u7C7B\u89C4\u5219" : key === "chapter" ? "\u7F16\u8F91\u7AE0\u8282\u7C7B\u89C4\u5219" : "\u7F16\u8F91\u5C0F\u8282\u89C4\u5219";
     caret.style.cssText = "cursor:pointer;margin-right:6px;user-select:none;opacity:0.75;";
     setting.nameEl.prepend(caret);
     const detail = document.createElement("div");
     detail.style.cssText = "display:none;padding:2px 0 10px 26px;";
     setting.settingEl.after(detail);
     const hint = document.createElement("div");
-    hint.textContent = "\u5355\u5B57\u76F4\u63A5\u5199\uFF1B\u8BCD\u7EC4\u7528 / \u5206\u9694\uFF0C\u5982 \u6211/\u7AE0\u8282/\u7AE0/\u8282\uFF08\u957F\u8BCD\u4F18\u5148\u5339\u914D\uFF09";
+    hint.textContent = key === "section" ? "\u6570\u5B57\u4E0E\u6807\u9898\u4E4B\u95F4\u7684\u5206\u9694\u7B26\uFF0C\u7528 / \u5206\u9694\u591A\u9879\uFF1B\u7A7A\u767D\u5199\u300C\u7A7A\u683C\u300D\uFF0C\u5982 \u7A7A\u683C/\u3001/. " : "\u5355\u5B57\u76F4\u63A5\u5199\uFF1B\u8BCD\u7EC4\u7528 / \u5206\u9694\uFF0C\u5982 \u6211/\u7AE0\u8282/\u7AE0/\u8282\uFF08\u957F\u8BCD\u4F18\u5148\u5339\u914D\uFF09";
     hint.style.cssText = "color:var(--text-muted);font-size:11px;margin:2px 0 4px;";
     detail.appendChild(hint);
     const cfg = this.plugin.settings.rules || {};
-    this.ruleRow(detail, "\u8D77\u59CB\u5B57", cfg.prefix || DEFAULT_RULES_CONFIG.prefix, "prefix");
     if (key === "vol") {
+      this.ruleRow(detail, "\u8D77\u59CB\u5B57", cfg.prefix || DEFAULT_RULES_CONFIG.prefix, "prefix");
       this.ruleRow(detail, "\u5377\u7C7B\u6807\u8BC6\u5B57", cfg.volumeUnits || DEFAULT_RULES_CONFIG.volumeUnits, "volumeUnits");
-    } else {
+    } else if (key === "chapter") {
+      this.ruleRow(detail, "\u8D77\u59CB\u5B57", cfg.prefix || DEFAULT_RULES_CONFIG.prefix, "prefix");
       this.ruleRow(detail, "\u7AE0\u8282\u7C7B\u6807\u8BC6\u5B57", cfg.chapterUnits || DEFAULT_RULES_CONFIG.chapterUnits, "chapterUnits");
+    } else {
+      this.ruleRow(detail, "\u5206\u9694\u7B26", cfg.sectionSeparators || DEFAULT_RULES_CONFIG.sectionSeparators, "sectionSeparators");
     }
     let open = false;
     caret.addEventListener("click", () => {
@@ -809,7 +838,7 @@ var HighlightSettingsTab = class extends obsidian.PluginSettingTab {
     for (const key of Object.keys(defaults)) {
       let picker = null;
       const setting = new obsidian.Setting(parent).setName(COLOR_LABELS[key] || key);
-      if (key === "vol" || key === "chapter") this.attachRuleEditor(setting, key);
+      if (key === "vol" || key === "chapter" || key === "section") this.attachRuleEditor(setting, key);
       const sampleEl = setting.nameEl.createSpan({ cls: "inknote-color-sample" });
       sampleEl.style.cssText = "margin-left:12px;opacity:0.9;font-weight:normal;white-space:pre-wrap;";
       const sample = sampleFor(key);
@@ -837,6 +866,9 @@ module.exports.__test = {
   getRulesConfig: () => activeRulesConfig,
   DEFAULT_RULES_CONFIG,
   makeHeadingLineRe,
+  makeSectionRe,
+  parseUnitOptions,
+  firstSeparator,
   sampleFor,
   COLOR_SAMPLES,
   COLOR_LABELS,

@@ -420,3 +420,58 @@ test('小节行里的其他行内规则不受影响（书名号照常）', () =>
   assert.ok(t.some((x) => x.text.includes('《红楼梦》') && x.color === L.book), '书名号应保留');
   assert.ok(!t.some((x) => x.color === L.metaKey || x.color === L.metaValue), '冒号不应抢色');
 });
+
+// ---------- 小节分隔符 ----------
+
+function sectionColor(line) {
+  return T.buildTokens(line, false).some((x) => x.color === T.THEMES.light.section);
+}
+
+test('小节分隔符：默认只认空格', () => {
+  try {
+    T.applyRulesConfig({});
+    assert.ok(sectionColor('1 引言'), '1 引言 应匹配');
+    assert.ok(!sectionColor('1、引言'), '默认不该匹配 1、引言');
+  } finally {
+    T.applyRulesConfig({});
+  }
+});
+
+test('小节分隔符：配置「空格/、」后两种都能匹配', () => {
+  try {
+    T.applyRulesConfig({ sectionSeparators: '空格/、' });
+    assert.ok(sectionColor('1 引言'));
+    assert.ok(sectionColor('1、引言'));
+  } finally {
+    T.applyRulesConfig({});
+  }
+});
+
+test('小节分隔符：只配「.」时，1.引言 匹配、空格写法不再匹配', () => {
+  try {
+    T.applyRulesConfig({ sectionSeparators: '.' });
+    assert.ok(sectionColor('1.引言'));
+    assert.ok(!sectionColor('1 引言'), '只配 . 时空格分隔不应匹配');
+  } finally {
+    T.applyRulesConfig({});
+  }
+});
+
+test('小节分隔符：示例与预览跟随配置', () => {
+  try {
+    T.applyRulesConfig({ sectionSeparators: '、' });
+    assert.ok(T.sampleFor('section').includes('、'), '示例应含分隔符');
+    assert.ok(T.buildPreviewText().includes('1、引言'), '预览应含 1、引言');
+  } finally {
+    T.applyRulesConfig({});
+  }
+});
+
+test('小节分隔符：只有斜杠时回退默认', () => {
+  try {
+    T.applyRulesConfig({ sectionSeparators: '/' });
+    assert.strictEqual(T.getRulesConfig().sectionSeparators, T.DEFAULT_RULES_CONFIG.sectionSeparators);
+  } finally {
+    T.applyRulesConfig({});
+  }
+});

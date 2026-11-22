@@ -67,6 +67,7 @@ const DEFAULT_RULES_CONFIG = {
   prefix: "第",           // 起始字（字符类，可多个）
   volumeUnits: "卷",      // 卷类标识字
   chapterUnits: "回章节",  // 章节类标识字
+  sectionSeparators: "空格", // 数字小节：数字与标题之间的分隔符（空格 / 、 / . / ：…）
 };
 let activeRulesConfig = { ...DEFAULT_RULES_CONFIG };
 
@@ -96,6 +97,7 @@ function applyRulesConfig(cfg) {
     prefix: fix(c.prefix, DEFAULT_RULES_CONFIG.prefix),
     volumeUnits: fix(c.volumeUnits, DEFAULT_RULES_CONFIG.volumeUnits),
     chapterUnits: fix(c.chapterUnits, DEFAULT_RULES_CONFIG.chapterUnits),
+    sectionSeparators: fix(c.sectionSeparators, DEFAULT_RULES_CONFIG.sectionSeparators),
   };
   return activeRulesConfig;
 }
@@ -108,6 +110,27 @@ function makeHeadingLineRe(prefix, units) {
   const p = `(?:${pOpts.map(escapeRegExp).join("|")})`;
   const u = `(?:${uOpts.map(escapeRegExp).join("|")})`;
   return new RegExp(`^${p}[零一二三四五六七八九十百千0-9]+${u}.*$`, "gm");
+}
+
+/** 小节的「空格」写法（用户输入里用中文词表示空白，便于阅读） */
+function isSpaceToken(s) {
+  return s === "空格" || s === "space" || s === "Space" || s === " ";
+}
+
+/**
+ * 生成数字小节正则：数字 + 分隔符 + 标题。
+ * 默认分隔符为空格（保持旧行为）；用户可用 / 添加「、」「.」「：」「）」「空格」等。
+ */
+function makeSectionRe(separators) {
+  const raw = String(separators || "").trim();
+  let opts;
+  if (isSpaceToken(raw)) {
+    opts = ["[ \\t]+"];
+  } else {
+    opts = parseUnitOptions(raw).map((s) => (isSpaceToken(s) ? "[ \\t]+" : escapeRegExp(s)));
+  }
+  if (!opts.length) opts = ["[ \\t]+"];
+  return new RegExp(`^\\s*\\d{1,3}(?:${opts.join("|")})[^\\n]+$`, "gm");
 }
 
 // ---------- 规则表 ----------
@@ -126,7 +149,7 @@ function buildRules(t) {
     { name: "vol",        re: makeHeadingLineRe(activeRulesConfig.prefix, activeRulesConfig.volumeUnits), style: { color: t.vol, bold: true, sizeDelta: 4 } },
     { name: "chapter",    re: makeHeadingLineRe(activeRulesConfig.prefix, activeRulesConfig.chapterUnits), style: { color: t.chapter, bold: true, sizeDelta: 2 } },
     // 小节标题：数字+空格（1 引言）。数字+点/顿号（1. 1、）走 orderedMark，避免混色
-    { name: "numSection", re: /^\s*\d{1,3}[ \t]+[^\n]+$/gm, style: { color: t.section, bold: true } },
+    { name: "numSection", re: makeSectionRe(activeRulesConfig.sectionSeparators), style: { color: t.section, bold: true } },
     { name: "bareSection", re: /^\s*(?:简介|序|序言|前言|目录|后记|附录|凡例|校注凡例|说明|摘要|导读)\s*$/gm, style: { color: t.section, bold: true } },
     // meta（行内）：任意位置出现「中文键：值」就染，不挑词（适配小说自创词）
     // key 限定为纯中文（1-16 字）：避免 `https://...` 里的 `https:` 被当成 meta 键，
@@ -643,10 +666,11 @@ function buildPreviewText() {
   const p = parseUnitOptions(cfg.prefix)[0] || "第";
   const vu = parseUnitOptions(cfg.volumeUnits)[0] || "卷";
   const cu = parseUnitOptions(cfg.chapterUnits)[0] || "章";
+  const sep = firstSeparator(cfg.sectionSeparators);
   return [
     `${p}1${vu} 风起`,
     `${p}1${cu} 开端`,
-    "1 引言",
+    `1${sep}引言`,
     "简介",
     "作者：鲁迅",
     "---",
@@ -726,11 +750,21 @@ function renderSample(el, sample, isDark) {
 }
 
 // 逐项示例：vol/chapter 跟随用户配置动态生成（用户可能把「卷」换成「幕」），其余用固定示例
+/** 取第一个分隔符（用于示例/预览展示） */
+function firstSeparator(input) {
+  const raw = String(input || "").trim();
+  if (isSpaceToken(raw)) return " ";
+  const opts = parseUnitOptions(raw);
+  const s = opts[0] || "空格";
+  return isSpaceToken(s) ? " " : s;
+}
+
 function sampleFor(key) {
   const cfg = activeRulesConfig;
   const p = parseUnitOptions(cfg.prefix)[0] || "第";
   if (key === "vol") return `${p}1${parseUnitOptions(cfg.volumeUnits)[0] || "卷"} 风起`;
   if (key === "chapter") return `${p}1${parseUnitOptions(cfg.chapterUnits)[0] || "章"} 开端`;
+  if (key === "section") return `1${firstSeparator(cfg.sectionSeparators)}引言`;
   return COLOR_SAMPLES[key] || key;
 }
 
@@ -857,7 +891,7 @@ class HighlightSettingsTab extends obsidian.PluginSettingTab {
   attachRuleEditor(setting, key) {
     const caret = document.createElement("span");
     caret.textContent = "▸";
-    caret.title = key === "vol" ? "编辑卷类规则的匹配字" : "编辑章节类规则的匹配字";
+    caret.title = key === "vol" ? "编辑卷类规则" : key === "chapter" ? "编辑章节类规则" : "编辑小节规则";
     caret.style.cssText = "cursor:pointer;margin-right:6px;user-select:none;opacity:0.75;";
     setting.nameEl.prepend(caret);
 
@@ -866,16 +900,21 @@ class HighlightSettingsTab extends obsidian.PluginSettingTab {
     setting.settingEl.after(detail);
 
     const hint = document.createElement("div");
-    hint.textContent = "单字直接写；词组用 / 分隔，如 我/章节/章/节（长词优先匹配）";
+    hint.textContent = key === "section"
+      ? "数字与标题之间的分隔符，用 / 分隔多项；空白写「空格」，如 空格/、/. "
+      : "单字直接写；词组用 / 分隔，如 我/章节/章/节（长词优先匹配）";
     hint.style.cssText = "color:var(--text-muted);font-size:11px;margin:2px 0 4px;";
     detail.appendChild(hint);
 
     const cfg = this.plugin.settings.rules || {};
-    this.ruleRow(detail, "起始字", cfg.prefix || DEFAULT_RULES_CONFIG.prefix, "prefix");
     if (key === "vol") {
+      this.ruleRow(detail, "起始字", cfg.prefix || DEFAULT_RULES_CONFIG.prefix, "prefix");
       this.ruleRow(detail, "卷类标识字", cfg.volumeUnits || DEFAULT_RULES_CONFIG.volumeUnits, "volumeUnits");
-    } else {
+    } else if (key === "chapter") {
+      this.ruleRow(detail, "起始字", cfg.prefix || DEFAULT_RULES_CONFIG.prefix, "prefix");
       this.ruleRow(detail, "章节类标识字", cfg.chapterUnits || DEFAULT_RULES_CONFIG.chapterUnits, "chapterUnits");
+    } else {
+      this.ruleRow(detail, "分隔符", cfg.sectionSeparators || DEFAULT_RULES_CONFIG.sectionSeparators, "sectionSeparators");
     }
 
     let open = false;
@@ -911,8 +950,8 @@ class HighlightSettingsTab extends obsidian.PluginSettingTab {
       let picker = null;
       const setting = new obsidian.Setting(parent).setName(COLOR_LABELS[key] || key);
 
-      // 卷 / 章：名称最左侧加折叠箭头，展开后编辑该类规则的匹配字
-      if (key === "vol" || key === "chapter") this.attachRuleEditor(setting, key);
+      // 卷 / 章 / 小节：名称最左侧加折叠箭头，展开后编辑该类的匹配字
+      if (key === "vol" || key === "chapter" || key === "section") this.attachRuleEditor(setting, key);
 
       // 名称后面的逐项实时示例：直接显示该 token 当前颜色/样式的效果
       const sampleEl = setting.nameEl.createSpan({ cls: "inknote-color-sample" });
@@ -951,6 +990,9 @@ module.exports.__test = {
   getRulesConfig: () => activeRulesConfig,
   DEFAULT_RULES_CONFIG,
   makeHeadingLineRe,
+  makeSectionRe,
+  parseUnitOptions,
+  firstSeparator,
   sampleFor,
   COLOR_SAMPLES,
   COLOR_LABELS,
