@@ -421,6 +421,33 @@ test('小节行里的其他行内规则不受影响（书名号照常）', () =>
   assert.ok(!t.some((x) => x.color === L.metaKey || x.color === L.metaValue), '冒号不应抢色');
 });
 
+// ---------- meta 值：英文值 + 空格截断 ----------
+
+test('meta 值：英文值统一染 metaValue，不被英文规则抢色', () => {
+  const t = styled('作者：aiwlgp');
+  assert.ok(t.some((x) => x.color === L.metaValue), '应有 metaValue 色：' + JSON.stringify(t));
+  assert.ok(!t.some((x) => x.color === L.en), 'aiwlgp 不应被英文规则染成 en 色');
+});
+
+test('meta 值：冒号后到空格为止，空格后的内容不染', () => {
+  const t = styled('作者：aiwlgp 鲁迅');
+  const meta = t.filter((x) => x.color === L.metaValue).map((x) => x.text).join('');
+  assert.ok(meta.includes('aiwlgp'), 'aiwlgp 应染 metaValue：' + JSON.stringify(t));
+  assert.ok(!meta.includes('鲁迅'), '空格后的鲁迅不应染 metaValue');
+});
+
+test('meta 值：中文值仍正常（作者：鲁迅）', () => {
+  const t = styled('作者：鲁迅');
+  assert.ok(t.some((x) => x.color === L.metaValue), '应有 metaValue 色');
+});
+
+test('meta 值：数字值也不被数字规则抢色', () => {
+  const t = styled('版本：2026');
+  const meta = t.filter((x) => x.color === L.metaValue).map((x) => x.text).join('');
+  assert.ok(meta.includes('2026'), '数字应在 metaValue 里：' + JSON.stringify(t));
+  assert.ok(!t.some((x) => x.color === L.numeric), '数字不应被 numeric 抢色');
+});
+
 // ---------- 小节分隔符 ----------
 
 function sectionColor(line) {

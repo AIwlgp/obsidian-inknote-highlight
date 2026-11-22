@@ -162,7 +162,10 @@ function buildRules(t) {
     // value = 冒号后到行尾（最长 200 字），不再被中文标点截断
     // 冒号后跟双引号（他说："…"）则失效：引号内容交给 quoteDouble（优先级最高）
     { name: "metaKey", re: /(?:^|[^\u4e00-\u9fff\w])([\u4e00-\u9fff]{1,16})(?=[：:](?!\s*["\u201C\u201D]))/gm, group: 1, style: { color: t.metaKey } },
-    { name: "metaValue", re: /(?:^|[^\u4e00-\u9fff\w])([\u4e00-\u9fff]{1,16}[：:](?!\s*["\u201C\u201D])[^\n]{0,200})/gm, group: 1, style: { color: t.metaValue } },
+    // meta 值：冒号后到「空格/行尾」为止，中英文数字都算。
+    // 值里的英文/数字由后面的后处理让位（见 collectSpans 末尾），这里不加 atomic，
+    // 否则 key 也会被值色覆盖。
+    { name: "metaValue", re: /(?:^|[^\u4e00-\u9fff\w])([\u4e00-\u9fff]{1,16}[：:](?!\s*["\u201C\u201D])[^\s]{1,200})/gm, group: 1, style: { color: t.metaValue } },
     { name: "divider", re: /^\s*[=\-—─═*～~_]{6,}\s*$/gm, style: { color: t.ref } },
     // 标题：组 2 = 标题文字（组 1 是 # 标记，不染色）；颜色按 # 层级递进
     { name: "heading", re: /^(#{1,6})\s+(.+)$/gm, group: 2, style: (m, th) => {
@@ -304,7 +307,7 @@ function collectSpans(text, theme, opts = {}) {
       if (!seg) continue;
       const [start, end] = seg;
       if (end <= start) continue;
-      const span = { start, end, ...st };
+      const span = { start, end, rule: rule.name, ...st };
       if (rule.atomic) span.atomic = true;
       if (rule.priority !== void 0) span.priority = rule.priority;
       spans.push(span);
@@ -340,6 +343,17 @@ function collectSpans(text, theme, opts = {}) {
     };
     pair(["\uFF08", "("], ["\uFF09", ")"], theme.ordinalParenCn, true);
     pair(["\u3010"], ["\u3011"], theme.bracket, false);
+  }
+  {
+    const META_VALUE_RULES = /* @__PURE__ */ new Set(["en", "num", "numUnit", "date", "time"]);
+    const metaValues = spans.filter((s) => s.rule === "metaValue");
+    if (metaValues.length) {
+      for (let i = spans.length - 1; i >= 0; i--) {
+        const s = spans[i];
+        if (!META_VALUE_RULES.has(s.rule)) continue;
+        if (metaValues.some((m) => s.start >= m.start && s.end <= m.end)) spans.splice(i, 1);
+      }
+    }
   }
   return spans;
 }
@@ -577,7 +591,7 @@ var COLOR_LABELS = {
   italic: "\u659C\u4F53\u6807\u6CE8\u884C *\u2026",
   meta: "\u8868\u683C\u8868\u5934",
   metaKey: "meta \u952E\uFF08\u4F5C\u8005\uFF09",
-  metaValue: "meta \u503C\uFF08\uFF1A\u9C81\u8FC5\uFF09",
+  metaValue: "meta \u503C\uFF08\uFF1Aaiwlgp\uFF09",
   ref: "\u53C2\u8003\u6587\u732E [1]",
   blockquote: "\u5F15\u7528\u884C >",
   book: "\u4E66\u540D\u53F7\u300A\u300B",
