@@ -544,33 +544,39 @@ var COLOR_LABELS = {
   en: "\u82F1\u6587 / \u62C9\u4E01\u6807\u8BC6\u7B26",
   bracket: "\u65B9\u62EC\u53F7\u3010\u3011"
 };
-var PREVIEW_TEXT = [
-  "\u7B2C1\u5377 \u98CE\u8D77",
-  "\u7B2C1\u7AE0 \u5F00\u7AEF",
-  "1 \u5F15\u8A00",
-  "\u7B80\u4ECB",
-  "\u4F5C\u8005\uFF1A\u9C81\u8FC5",
-  "---",
-  "# \u4E00\u7EA7\u6807\u9898",
-  "## \u4E8C\u7EA7\u6807\u9898",
-  "### \u4E09\u7EA7\u6807\u9898",
-  "#### \u56DB\u7EA7\u6807\u9898",
-  "> \u5F15\u7528\u884C",
-  "*\u659C\u4F53\u6807\u6CE8\u884C",
-  "- \u5217\u8868\u9879",
-  "- [x] \u4EFB\u52A1\u9879",
-  "\u4E00\u3001\u4E2D\u6587\u5E8F\u53F7",
-  "\u300A\u7EA2\u697C\u68A6\u300B\u300C\u5F15\u53F7\u300D\u300E\u4E66\u540D\u5F15\u53F7\u300F\u201C\u53CC\u5F15\u53F7\u201D",
-  "[1] \u2460 \uFF081961\uFF09 \uFF08\u4E2D\u6587\u62EC\u53F7\uFF09",
-  "2024-01-01 12:30 1970s 7.83Hz",
-  "\u2192 \u2014\u2014",
-  "**\u7C97\u4F53** ~~\u5220\u9664~~ `\u4EE3\u7801`",
-  "[\u94FE\u63A5](https://example.com) [[wiki]]",
-  "",
-  "| \u8868\u5934 | \u8868\u5934 |",
-  "|---|---|",
-  "| \u6B63\u6587 | \u6B63\u6587 |"
-].join("\n");
+function buildPreviewText() {
+  const cfg = activeRulesConfig;
+  const p = (cfg.prefix || "\u7B2C")[0];
+  const vu = (cfg.volumeUnits || "\u5377")[0];
+  const cu = (cfg.chapterUnits || "\u7AE0")[0];
+  return [
+    `${p}1${vu} \u98CE\u8D77`,
+    `${p}1${cu} \u5F00\u7AEF`,
+    "1 \u5F15\u8A00",
+    "\u7B80\u4ECB",
+    "\u4F5C\u8005\uFF1A\u9C81\u8FC5",
+    "---",
+    "# \u4E00\u7EA7\u6807\u9898",
+    "## \u4E8C\u7EA7\u6807\u9898",
+    "### \u4E09\u7EA7\u6807\u9898",
+    "#### \u56DB\u7EA7\u6807\u9898",
+    "> \u5F15\u7528\u884C",
+    "*\u659C\u4F53\u6807\u6CE8\u884C",
+    "- \u5217\u8868\u9879",
+    "- [x] \u4EFB\u52A1\u9879",
+    "\u4E00\u3001\u4E2D\u6587\u5E8F\u53F7",
+    "\u300A\u7EA2\u697C\u68A6\u300B\u300C\u5F15\u53F7\u300D\u300E\u4E66\u540D\u5F15\u53F7\u300F\u201C\u53CC\u5F15\u53F7\u201D",
+    "[1] \u2460 \uFF081961\uFF09 \uFF08\u4E2D\u6587\u62EC\u53F7\uFF09",
+    "2024-01-01 12:30 1970s 7.83Hz",
+    "\u2192 \u2014\u2014",
+    "**\u7C97\u4F53** ~~\u5220\u9664~~ `\u4EE3\u7801`",
+    "[\u94FE\u63A5](https://example.com) [[wiki]]",
+    "",
+    "| \u8868\u5934 | \u8868\u5934 |",
+    "|---|---|",
+    "| \u6B63\u6587 | \u6B63\u6587 |"
+  ].join("\n");
+}
 var COLOR_SAMPLES = {
   vol: "\u7B2C1\u5377 \u98CE\u8D77",
   chapter: "\u7B2C1\u7AE0 \u5F00\u7AEF",
@@ -644,7 +650,7 @@ function renderPreview(container, isDark) {
     isDark ? "background: #1e1e1e; color: #dcdcdc" : "background: #ffffff; color: #222222"
   ].join("; ");
   const frag = document.createDocumentFragment();
-  for (const tk of buildTokens(PREVIEW_TEXT, isDark)) {
+  for (const tk of buildTokens(buildPreviewText(), isDark)) {
     if (!tk.color && !tk.bold && !tk.strike && !tk.mono && !tk.sizeDelta) {
       frag.appendChild(document.createTextNode(tk.text));
       continue;
@@ -812,7 +818,7 @@ module.exports.__test = {
   sampleFor,
   COLOR_SAMPLES,
   COLOR_LABELS,
-  PREVIEW_TEXT,
+  buildPreviewText,
   buildRules,
   detectContainers,
   createContainerCache,

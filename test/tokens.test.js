@@ -338,3 +338,16 @@ test('特殊规则：vol/chapter 示例跟随配置变化', () => {
     T.applyRulesConfig({});
   }
 });
+
+test('顶部整体预览跟随规则变化（卷/章两行）', () => {
+  try {
+    T.applyRulesConfig({ volumeUnits: '幕', chapterUnits: '集' });
+    const text = T.buildPreviewText();
+    assert.ok(text.includes('第1幕'), '预览应显示「第1幕」: ' + text.split('\n')[0]);
+    assert.ok(text.includes('第1集'), '预览应显示「第1集」');
+    assert.ok(!text.includes('第1卷'), '不应再出现写死的「第1卷」');
+    assert.ok(!text.includes('第1章'), '不应再出现写死的「第1章」');
+  } finally {
+    T.applyRulesConfig({});
+  }
+});

@@ -607,34 +607,41 @@ const COLOR_LABELS = {
   bracket: "方括号【】",
 };
 
-// 预览用的示例文本：覆盖所有规则类型
-const PREVIEW_TEXT = [
-  "第1卷 风起",
-  "第1章 开端",
-  "1 引言",
-  "简介",
-  "作者：鲁迅",
-  "---",
-  "# 一级标题",
-  "## 二级标题",
-  "### 三级标题",
-  "#### 四级标题",
-  "> 引用行",
-  "*斜体标注行",
-  "- 列表项",
-  "- [x] 任务项",
-  "一、中文序号",
-  "《红楼梦》「引号」『书名引号』“双引号”",
-  "[1] ① （1961） （中文括号）",
-  "2024-01-01 12:30 1970s 7.83Hz",
-  "→ ——",
-  "**粗体** ~~删除~~ `代码`",
-  "[链接](https://example.com) [[wiki]]",
-  "",
-  "| 表头 | 表头 |",
-  "|---|---|",
-  "| 正文 | 正文 |",
-].join("\n");
+// 顶部整体预览用的示例文本：卷/章两行跟随当前规则配置动态生成，
+// 这样把「卷」换成「幕」后，预览里会显示「第1幕 风起」而不是写死的「第1卷」。
+function buildPreviewText() {
+  const cfg = activeRulesConfig;
+  const p = (cfg.prefix || "第")[0];
+  const vu = (cfg.volumeUnits || "卷")[0];
+  const cu = (cfg.chapterUnits || "章")[0];
+  return [
+    `${p}1${vu} 风起`,
+    `${p}1${cu} 开端`,
+    "1 引言",
+    "简介",
+    "作者：鲁迅",
+    "---",
+    "# 一级标题",
+    "## 二级标题",
+    "### 三级标题",
+    "#### 四级标题",
+    "> 引用行",
+    "*斜体标注行",
+    "- 列表项",
+    "- [x] 任务项",
+    "一、中文序号",
+    "《红楼梦》「引号」『书名引号』“双引号”",
+    "[1] ① （1961） （中文括号）",
+    "2024-01-01 12:30 1970s 7.83Hz",
+    "→ ——",
+    "**粗体** ~~删除~~ `代码`",
+    "[链接](https://example.com) [[wiki]]",
+    "",
+    "| 表头 | 表头 |",
+    "|---|---|",
+    "| 正文 | 正文 |",
+  ].join("\n");
+}
 
 // 每个颜色项的示例文本：必须带上该规则所需的标记，否则规则不匹配、示例永远无色。
 // （例如 heading 规则要求行首 #，bold 要求 **，strike 要求 ~~，meta 表头需要表格两行）
@@ -715,7 +722,7 @@ function renderPreview(container, isDark) {
     isDark ? "background: #1e1e1e; color: #dcdcdc" : "background: #ffffff; color: #222222",
   ].join("; ");
   const frag = document.createDocumentFragment();
-  for (const tk of buildTokens(PREVIEW_TEXT, isDark)) {
+  for (const tk of buildTokens(buildPreviewText(), isDark)) {
     if (!tk.color && !tk.bold && !tk.strike && !tk.mono && !tk.sizeDelta) {
       frag.appendChild(document.createTextNode(tk.text));
       continue;
@@ -912,7 +919,7 @@ module.exports.__test = {
   sampleFor,
   COLOR_SAMPLES,
   COLOR_LABELS,
-  PREVIEW_TEXT,
+  buildPreviewText,
   buildRules,
   detectContainers,
   createContainerCache,
