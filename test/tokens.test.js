@@ -228,3 +228,34 @@ test('颜色覆盖：getActiveThemes 反映当前生效值', () => {
     T.applyColorOverrides({});
   }
 });
+
+test('设置页示例：每个颜色项的示例都能真正触发该项颜色', () => {
+  // 防止「示例文本缺标记 → 规则不匹配 → 示例永远无色」的回归
+  const missing = [];
+  for (const key of Object.keys(T.THEMES.light)) {
+    const sample = T.COLOR_SAMPLES[key];
+    if (!sample) { missing.push(key + '(无示例)'); continue; }
+    const toks = T.buildTokens(sample, false);
+    const hit = toks.some((t) => t.color === T.THEMES.light[key]);
+    if (!hit) missing.push(key + ' -> ' + JSON.stringify(sample) + ' tokens=' + JSON.stringify(toks.filter((t) => t.color)));
+  }
+  assert.deepStrictEqual(missing, [], '以下示例没有产生对应颜色：\n' + missing.join('\n'));
+});
+
+test('设置页示例：暗色示例同样有效', () => {
+  const missing = [];
+  for (const key of Object.keys(T.THEMES.dark)) {
+    const sample = T.COLOR_SAMPLES[key];
+    if (!sample) { missing.push(key); continue; }
+    const toks = T.buildTokens(sample, true);
+    if (!toks.some((t) => t.color === T.THEMES.dark[key])) missing.push(key);
+  }
+  assert.deepStrictEqual(missing, [], '暗色示例没有产生对应颜色：' + missing.join(','));
+});
+
+test('设置页示例：每个颜色键都有标签和示例', () => {
+  for (const key of Object.keys(T.THEMES.light)) {
+    assert.ok(T.COLOR_LABELS[key], '缺少标签: ' + key);
+    assert.ok(T.COLOR_SAMPLES[key], '缺少示例: ' + key);
+  }
+});

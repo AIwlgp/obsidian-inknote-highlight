@@ -542,19 +542,19 @@ var COLOR_SAMPLES = {
   vol: "\u7B2C1\u5377 \u98CE\u8D77",
   chapter: "\u7B2C1\u7AE0 \u5F00\u7AEF",
   section: "1 \u5F15\u8A00",
-  h1: "\u4E00\u7EA7\u6807\u9898",
-  h2: "\u4E8C\u7EA7\u6807\u9898",
-  h3: "\u4E09\u7EA7\u6807\u9898",
-  h4: "\u56DB\u7EA7\u6807\u9898",
+  h1: "# \u4E00\u7EA7\u6807\u9898",
+  h2: "## \u4E8C\u7EA7\u6807\u9898",
+  h3: "### \u4E09\u7EA7\u6807\u9898",
+  h4: "#### \u56DB\u7EA7\u6807\u9898",
   ordinalCircle: "\u2460\u2461\u2462",
   ordinalParenNum: "\uFF081961\uFF09",
   ordinalParenCn: "\uFF08\u4E2D\u6587\u62EC\u53F7\uFF09",
   arrow: "\u2192 \u21D2",
   dash: "\u2014\u2014\u2014\u2014",
   italic: "*\u659C\u4F53\u6807\u6CE8\u884C",
-  meta: "\u8868\u5934",
-  metaKey: "\u4F5C\u8005",
-  metaValue: "\uFF1A\u9C81\u8FC5",
+  meta: "| \u8868\u5934 |\n|---|",
+  metaKey: "\u4F5C\u8005\uFF1A\u9C81\u8FC5",
+  metaValue: "\u4F5C\u8005\uFF1A\u9C81\u8FC5",
   ref: "[1] [12]",
   blockquote: "> \u5F15\u7528\u884C",
   book: "\u300A\u7EA2\u697C\u68A6\u300B",
@@ -562,9 +562,9 @@ var COLOR_SAMPLES = {
   quoteDouble: "\u201C\u53CC\u5F15\u53F7\u201D",
   quoteBook: "\u300E\u4E66\u540D\u5F15\u53F7\u300F",
   numeric: "2024-01-01 1234 7.83Hz",
-  bold: "\u7C97\u4F53",
-  link: "[\u94FE\u63A5](url) https://a.b",
-  strike: "\u5220\u9664\u7EBF",
+  bold: "**\u7C97\u4F53**",
+  link: "[\u94FE\u63A5](url)",
+  strike: "~~\u5220\u9664\u7EBF~~",
   list: "- \u5217\u8868\u9879",
   en: "English ABC",
   bracket: "\u3010\u65B9\u62EC\u53F7\u3011"
@@ -679,7 +679,7 @@ var HighlightSettingsTab = class extends obsidian.PluginSettingTab {
       let picker = null;
       const setting = new obsidian.Setting(parent).setName(COLOR_LABELS[key] || key);
       const sampleEl = setting.nameEl.createSpan({ cls: "inknote-color-sample" });
-      sampleEl.style.cssText = "margin-left:12px;opacity:0.9;font-weight:normal;";
+      sampleEl.style.cssText = "margin-left:12px;opacity:0.9;font-weight:normal;white-space:pre-wrap;";
       const sample = COLOR_SAMPLES[key] || key;
       renderSample(sampleEl, sample, isDark);
       setting.addColorPicker((cp) => {
@@ -700,6 +700,9 @@ module.exports.__test = {
   THEMES,
   applyColorOverrides,
   getActiveThemes: () => activeThemes,
+  COLOR_SAMPLES,
+  COLOR_LABELS,
+  PREVIEW_TEXT,
   buildRules,
   detectContainers,
   createContainerCache,

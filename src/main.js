@@ -596,24 +596,25 @@ const PREVIEW_TEXT = [
   "| 正文 | 正文 |",
 ].join("\n");
 
-// 每个颜色项的示例文本：直接显示该项当前颜色/样式的效果
+// 每个颜色项的示例文本：必须带上该规则所需的标记，否则规则不匹配、示例永远无色。
+// （例如 heading 规则要求行首 #，bold 要求 **，strike 要求 ~~，meta 表头需要表格两行）
 const COLOR_SAMPLES = {
   vol: "第1卷 风起",
   chapter: "第1章 开端",
   section: "1 引言",
-  h1: "一级标题",
-  h2: "二级标题",
-  h3: "三级标题",
-  h4: "四级标题",
+  h1: "# 一级标题",
+  h2: "## 二级标题",
+  h3: "### 三级标题",
+  h4: "#### 四级标题",
   ordinalCircle: "①②③",
   ordinalParenNum: "（1961）",
   ordinalParenCn: "（中文括号）",
   arrow: "→ ⇒",
   dash: "————",
   italic: "*斜体标注行",
-  meta: "表头",
-  metaKey: "作者",
-  metaValue: "：鲁迅",
+  meta: "| 表头 |\n|---|",
+  metaKey: "作者：鲁迅",
+  metaValue: "作者：鲁迅",
   ref: "[1] [12]",
   blockquote: "> 引用行",
   book: "《红楼梦》",
@@ -621,9 +622,9 @@ const COLOR_SAMPLES = {
   quoteDouble: "“双引号”",
   quoteBook: "『书名引号』",
   numeric: "2024-01-01 1234 7.83Hz",
-  bold: "粗体",
-  link: "[链接](url) https://a.b",
-  strike: "删除线",
+  bold: "**粗体**",
+  link: "[链接](url)",
+  strike: "~~删除线~~",
   list: "- 列表项",
   en: "English ABC",
   bracket: "【方括号】",
@@ -754,7 +755,7 @@ class HighlightSettingsTab extends obsidian.PluginSettingTab {
 
       // 名称后面的逐项实时示例：直接显示该 token 当前颜色/样式的效果
       const sampleEl = setting.nameEl.createSpan({ cls: "inknote-color-sample" });
-      sampleEl.style.cssText = "margin-left:12px;opacity:0.9;font-weight:normal;";
+      sampleEl.style.cssText = "margin-left:12px;opacity:0.9;font-weight:normal;white-space:pre-wrap;";
       const sample = COLOR_SAMPLES[key] || key;
       renderSample(sampleEl, sample, isDark);
 
@@ -784,6 +785,9 @@ module.exports.__test = {
   THEMES,
   applyColorOverrides,
   getActiveThemes: () => activeThemes,
+  COLOR_SAMPLES,
+  COLOR_LABELS,
+  PREVIEW_TEXT,
   buildRules,
   detectContainers,
   createContainerCache,
